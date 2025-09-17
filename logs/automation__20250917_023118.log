@@ -1,0 +1,21 @@
+2025-09-17 02:31:18,540 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_023118.log
+2025-09-17 02:31:18,594 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_023118.log
+2025-09-17 02:31:18,595 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-17 02:31:24,298 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project
+2025-09-17 02:31:24,299 - HybridUIAutomation - INFO - [sample_project] 開始處理專案
+2025-09-17 02:31:24,321 - HybridUIAutomation - INFO - [sample_project] 開啟 VS Code 專案
+2025-09-17 02:31:34,653 - HybridUIAutomation - INFO - [sample_project] 清除 Copilot Chat 記憶
+2025-09-17 02:31:38,454 - HybridUIAutomation - INFO - [sample_project] 處理 Copilot Chat (智能等待: 開啟)
+2025-09-17 02:32:45,132 - HybridUIAutomation - INFO - [sample_project] 驗證處理結果
+2025-09-17 02:32:45,141 - HybridUIAutomation - INFO - [sample_project] 智能關閉專案並清除記憶
+2025-09-17 02:32:57,389 - HybridUIAutomation - INFO - [sample_project] 專案處理完成
+2025-09-17 02:32:57,401 - HybridUIAutomation - INFO - ✅ 專案處理成功: sample_project (耗時: 93.11秒)
+2025-09-17 02:32:59,229 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project_2
+2025-09-17 02:32:59,230 - HybridUIAutomation - INFO - [sample_project_2] 開始處理專案
+2025-09-17 02:32:59,252 - HybridUIAutomation - INFO - [sample_project_2] 開啟 VS Code 專案
+2025-09-17 02:33:09,147 - HybridUIAutomation - INFO - [sample_project_2] 清除 Copilot Chat 記憶
+2025-09-17 02:33:12,246 - HybridUIAutomation - INFO - [sample_project_2] 處理 Copilot Chat (智能等待: 開啟)
+2025-09-17 02:33:45,989 - HybridUIAutomation - INFO - [sample_project_2] 驗證處理結果
+2025-09-17 02:33:45,995 - HybridUIAutomation - INFO - [sample_project_2] 智能關閉專案並清除記憶
+2025-09-17 02:33:58,442 - HybridUIAutomation - INFO - [sample_project_2] 專案處理完成
+2025-09-17 02:33:58,451 - HybridUIAutomation - INFO - ✅ 專案處理成功: sample_project_2 (耗時: 59.23秒)

@@ -621,11 +621,14 @@ class CopilotHandler:
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult"
             result_subdir = execution_result_dir / ("Success" if is_success else "Fail")
-            result_subdir.mkdir(parents=True, exist_ok=True)
             
-            # 生成檔名（包含專案名稱和時間戳記）
-            timestamp = time.strftime('%Y%m%d_%H%M%S')
-            output_file = result_subdir / f"{project_name}_Copilot_AutoComplete_{timestamp}.md"
+            # 建立專案專屬資料夾
+            project_subdir = result_subdir / project_name
+            project_subdir.mkdir(parents=True, exist_ok=True)
+            
+            # 生成檔名（包含時間戳記，用於反覆互動的版本控制）
+            timestamp = time.strftime('%Y%m%d_%H%M')
+            output_file = project_subdir / f"Copilot_AutoComplete_{timestamp}.md"
             
             self.logger.info(f"儲存回應到: {output_file}")
             
@@ -640,6 +643,9 @@ class CopilotHandler:
                 f.write(response)
             
             self.logger.copilot_interaction("儲存回應", "SUCCESS", f"檔案: {output_file.name}")
+            
+            # 等待短暫時間確保檔案完全寫入
+            time.sleep(0.5)
             return True
             
         except Exception as e:
@@ -681,6 +687,9 @@ class CopilotHandler:
             # 步驟5: 儲存到檔案
             if not self.save_response_to_file(project_path, response, is_success=True):
                 return False, "無法儲存回應到檔案"
+            
+            # 確保檔案寫入完成後再繼續（避免競爭條件）
+            time.sleep(1)
             
             self.logger.copilot_interaction("專案處理完成", "SUCCESS", project_name)
             return True, None

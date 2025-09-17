@@ -59,7 +59,7 @@ class ErrorHandler:
         self.error_count = 0
         self.error_history: List[Dict] = []
         self.emergency_stop_requested = False
-        self.max_consecutive_errors = 5
+        self.max_consecutive_errors = 10  # 增加到10次，提高容錯性
         self.consecutive_errors = 0
         
         # 設定信號處理器（緊急停止）
@@ -178,7 +178,9 @@ class ErrorHandler:
         if error_type == ErrorType.USER_INTERRUPT:
             return RecoveryAction.ABORT
         elif error_type == ErrorType.VSCODE_ERROR:
-            return RecoveryAction.RESTART_VSCODE
+            # VS Code 錯誤時，首先嘗試清理環境，而不是立即重啟
+            # 這樣可以避免強制終止導致的崩潰
+            return RecoveryAction.CLEAN_ENVIRONMENT
         elif error_type == ErrorType.COPILOT_ERROR:
             return RecoveryAction.RETRY
         elif error_type == ErrorType.IMAGE_RECOGNITION_ERROR:
@@ -401,14 +403,34 @@ class RecoveryManager:
     def _clean_environment(self) -> bool:
         """清理環境"""
         try:
-            # 關閉所有應用程式，清理臨時檔案等
+            self.logger.info("開始清理環境...")
+            
+            # 導入 vscode_controller，使用延遲導入避免循環依賴
             from src.vscode_controller import ensure_clean_environment
+            
+            # 先嘗試優雅關閉
+            self.logger.info("嘗試優雅關閉所有VS Code實例...")
             result = ensure_clean_environment()
             
-            # 可以添加更多清理邏輯
-            time.sleep(5)  # 等待系統穩定
+            if not result:
+                self.logger.warning("優雅關閉失敗，等待系統穩定...")
+                # 等待更長時間讓系統穩定
+                time.sleep(10)
+                
+                # 再次嘗試清理
+                self.logger.info("重新嘗試清理環境...")
+                result = ensure_clean_environment()
             
-            return result
+            if result:
+                self.logger.info("✅ 環境清理成功")
+            else:
+                self.logger.warning("⚠️ 環境清理可能未完全成功，但繼續執行")
+            
+            # 額外等待時間確保系統穩定
+            time.sleep(3)
+            
+            return True  # 即使清理未完全成功也返回True，允許繼續執行
+            
         except Exception as e:
             self.logger.error(f"清理環境失敗: {str(e)}")
             return False

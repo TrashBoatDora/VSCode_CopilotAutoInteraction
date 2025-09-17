@@ -1,28 +1,9 @@
 {
-  "last_updated": "2025-09-15T04:34:36.291430",
+  "last_updated": "2025-09-17T02:33:58.446951",
   "projects": [
     {
-      "name": "public-apis_AutoDeletion",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotChatAutomator\\projects\\public-apis_AutoDeletion",
-      "status": "completed",
-      "has_copilot_file": true,
-      "file_count": 6,
-      "supported_files": [
-        "scripts\\tests\\test_validate_format.py",
-        "scripts\\tests\\test_validate_links.py",
-        "scripts\\tests\\__init__.py",
-        "scripts\\validate\\format.py",
-        "scripts\\validate\\links.py",
-        "scripts\\validate\\__init__.py"
-      ],
-      "last_processed": "2025-09-15T04:29:20.209808",
-      "error_message": null,
-      "processing_time": 95.0832245349884,
-      "retry_count": 0
-    },
-    {
       "name": "sample_project",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotChatAutomator\\projects\\sample_project",
+      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project",
       "status": "completed",
       "has_copilot_file": true,
       "file_count": 2,
@@ -30,14 +11,14 @@
         "main.py",
         "Calculator.java"
       ],
-      "last_processed": "2025-09-15T04:30:28.634361",
+      "last_processed": "2025-09-17T02:32:57.395263",
       "error_message": null,
-      "processing_time": 66.41077756881714,
+      "processing_time": 93.09895896911621,
       "retry_count": 0
     },
     {
       "name": "sample_project_2",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotChatAutomator\\projects\\sample_project_2",
+      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project_2",
       "status": "completed",
       "has_copilot_file": true,
       "file_count": 2,
@@ -45,48 +26,9 @@
         "main.py",
         "Calculator.java"
       ],
-      "last_processed": "2025-09-15T04:31:36.670753",
+      "last_processed": "2025-09-17T02:33:58.446943",
       "error_message": null,
-      "processing_time": 66.02660417556763,
-      "retry_count": 0
-    },
-    {
-      "name": "system-design-primer",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotChatAutomator\\projects\\system-design-primer",
-      "status": "completed",
-      "has_copilot_file": true,
-      "file_count": 26,
-      "supported_files": [
-        "solutions\\system_design\\mint\\mint_mapreduce.py",
-        "solutions\\system_design\\mint\\mint_snippets.py",
-        "solutions\\system_design\\mint\\__init__.py",
-        "solutions\\system_design\\pastebin\\pastebin.py",
-        "solutions\\system_design\\pastebin\\__init__.py",
-        "solutions\\system_design\\query_cache\\query_cache_snippets.py",
-        "solutions\\system_design\\query_cache\\__init__.py",
-        "solutions\\system_design\\sales_rank\\sales_rank_mapreduce.py",
-        "solutions\\system_design\\sales_rank\\__init__.py",
-        "solutions\\system_design\\social_graph\\social_graph_snippets.py",
-        "solutions\\system_design\\social_graph\\__init__.py",
-        "solutions\\system_design\\web_crawler\\web_crawler_mapreduce.py",
-        "solutions\\system_design\\web_crawler\\web_crawler_snippets.py",
-        "solutions\\system_design\\web_crawler\\__init__.py",
-        "solutions\\object_oriented_design\\call_center\\call_center.py",
-        "solutions\\object_oriented_design\\call_center\\__init__.py",
-        "solutions\\object_oriented_design\\deck_of_cards\\deck_of_cards.py",
-        "solutions\\object_oriented_design\\deck_of_cards\\__init__.py",
-        "solutions\\object_oriented_design\\hash_table\\hash_map.py",
-        "solutions\\object_oriented_design\\hash_table\\__init__.py",
-        "solutions\\object_oriented_design\\lru_cache\\lru_cache.py",
-        "solutions\\object_oriented_design\\lru_cache\\__init__.py",
-        "solutions\\object_oriented_design\\online_chat\\online_chat.py",
-        "solutions\\object_oriented_design\\online_chat\\__init__.py",
-        "solutions\\object_oriented_design\\parking_lot\\parking_lot.py",
-        "solutions\\object_oriented_design\\parking_lot\\__init__.py"
-      ],
-      "last_processed": "2025-09-15T04:34:36.291421",
-      "error_message": null,
-      "processing_time": 77.86161303520203,
+      "processing_time": 59.22228789329529,
       "retry_count": 0
     }
   ]

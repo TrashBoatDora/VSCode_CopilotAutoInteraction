@@ -357,7 +357,8 @@ class HybridUIAutomationScript:
             script_root = Path(__file__).parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
             project_name = Path(project.path).name
-            has_success_file = execution_result_dir.exists() and any(execution_result_dir.glob(f"{project_name}_Copilot_AutoComplete_*.md"))
+            project_result_dir = execution_result_dir / project_name
+            has_success_file = project_result_dir.exists() and any(project_result_dir.glob("Copilot_AutoComplete_*.md"))
             if not has_success_file:
                 raise AutomationError("缺少成功執行結果檔案", ErrorType.PROJECT_ERROR)
             

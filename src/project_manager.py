@@ -134,8 +134,9 @@ class ProjectManager:
             # 檢查是否已有 Copilot 處理結果（檢查統一的 ExecutionResult/Success 資料夾）
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
-            project_name = project_path.name
-            has_copilot_file = execution_result_dir.exists() and any(execution_result_dir.glob(f"{project_name}_Copilot_AutoComplete_*.md"))
+            project_result_dir = execution_result_dir / project_name
+            has_copilot_file = (project_result_dir.exists() and 
+                              any(project_result_dir.glob("Copilot_AutoComplete_*.md")))
             
             # 如果沒有支援的檔案，跳過此專案
             if file_count == 0:
@@ -274,7 +275,9 @@ class ProjectManager:
         if project:
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
-            has_success_file = execution_result_dir.exists() and any(execution_result_dir.glob(f"{project_name}_Copilot_AutoComplete_*.md"))
+            project_result_dir = execution_result_dir / project_name
+            has_success_file = (project_result_dir.exists() and 
+                              any(project_result_dir.glob("Copilot_AutoComplete_*.md")))
             if has_success_file:
                 project.has_copilot_file = True
                 return self.update_project_status(project_name, "completed", None, processing_time)
