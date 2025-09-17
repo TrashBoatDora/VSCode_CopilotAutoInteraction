@@ -336,17 +336,27 @@ class HybridUIAutomationScript:
             if self.error_handler.emergency_stop_requested:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
-            # 步驟3: 處理 Copilot Chat（使用使用者選擇的等待模式）
-            project_logger.log(f"處理 Copilot Chat (智能等待: {'開啟' if self.use_smart_wait else '關閉'})")
-            success, error_msg = self.copilot_handler.process_project_complete(
-                project.path, use_smart_wait=self.use_smart_wait
-            )
-            
-            if not success:
-                raise AutomationError(
-                    error_msg or "Copilot 處理失敗", 
-                    ErrorType.COPILOT_ERROR
+            # 步驟3: 處理 Copilot Chat（根據設定判斷是否使用反覆互動）
+            if config.INTERACTION_ENABLED:
+                # 使用反覆互動功能
+                project_logger.log(f"處理 Copilot Chat (啟用反覆互動功能，最大輪數: {config.INTERACTION_MAX_ROUNDS})")
+                from src.copilot_handler import process_with_iterations
+                success = process_with_iterations(project.path, config.INTERACTION_MAX_ROUNDS)
+                
+                if not success:
+                    raise AutomationError("Copilot 反覆互動處理失敗", ErrorType.COPILOT_ERROR)
+            else:
+                # 使用一般互動模式
+                project_logger.log(f"處理 Copilot Chat (智能等待: {'開啟' if self.use_smart_wait else '關閉'})")
+                success, error_msg = self.copilot_handler.process_project_complete(
+                    project.path, use_smart_wait=self.use_smart_wait
                 )
+                
+                if not success:
+                    raise AutomationError(
+                        error_msg or "Copilot 處理失敗", 
+                        ErrorType.COPILOT_ERROR
+                    )
             
             # 檢查中斷請求
             if self.error_handler.emergency_stop_requested:
@@ -358,7 +368,15 @@ class HybridUIAutomationScript:
             execution_result_dir = script_root / "ExecutionResult" / "Success"
             project_name = Path(project.path).name
             project_result_dir = execution_result_dir / project_name
-            has_success_file = project_result_dir.exists() and any(project_result_dir.glob("Copilot_AutoComplete_*.md"))
+            
+            # 支持多輪互動和舊版檔案格式
+            has_old_format = any(project_result_dir.glob("Copilot_AutoComplete_*.md"))
+            has_new_format = any(project_result_dir.glob("*_第*輪.md"))
+            has_success_file = project_result_dir.exists() and (has_new_format or has_old_format)
+            
+            # 調試信息
+            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, 舊格式檔案: {has_old_format}, 新格式檔案: {has_new_format}")
+            
             if not has_success_file:
                 raise AutomationError("缺少成功執行結果檔案", ErrorType.PROJECT_ERROR)
             
@@ -383,6 +401,15 @@ class HybridUIAutomationScript:
             bool: 關閉是否成功
         """
         try:
+            # 判斷是否處於多輪互動模式
+            is_iteration_mode = config.INTERACTION_ENABLED and config.INTERACTION_MAX_ROUNDS > 1
+            
+            # 多輪互動模式需要更長的等待時間
+            if is_iteration_mode:
+                self.logger.info("多輪互動模式，進行額外的穩定期等待...")
+                stabilization_time = 8  # 秒
+                time.sleep(stabilization_time)
+            
             # 如果使用智能等待，表示已經在 _smart_wait_for_response 中等待回應完成
             # 但我們仍需要進行最後確認
             if self.use_smart_wait:
@@ -405,8 +432,11 @@ class HybridUIAutomationScript:
                     self.logger.warning("⚠️ 最後確認時未能獲取到有效回應，但仍嘗試關閉")
                     return self.vscode_controller.close_current_project(force=False)
                 
-            # 固定等待模式下需要進行額外檢查
-            max_attempts = 3
+                # 固定等待模式下需要進行額外檢查
+            # 多輪互動模式需要更多的重試次數
+            is_iteration_mode = config.INTERACTION_ENABLED and config.INTERACTION_MAX_ROUNDS > 1
+            max_attempts = 5 if is_iteration_mode else 3
+            
             for attempt in range(max_attempts):
                 self.logger.debug(f"嘗試關閉專案 (第 {attempt + 1}/{max_attempts} 次)")
                 
@@ -417,10 +447,11 @@ class HybridUIAutomationScript:
                 if response and len(response) > 50:
                     self.logger.info(f"✅ 獲取到回應內容 ({len(response)} 字元)")
                 else:
-                    self.logger.warning("⚠️ 未能獲取到有效回應內容")
-                
-                # 等待一小段時間確認回應已完成
-                time.sleep(3)
+                    self.logger.warning("⚠️ 未能獲取到有效回應內容")                # 等待一小段時間確認回應已完成
+                # 多輪互動模式下使用漸進式等待時間
+                wait_time = 3 + (attempt * 2 if is_iteration_mode else 0)
+                self.logger.info(f"等待 {wait_time} 秒確保所有處理完成...")
+                time.sleep(wait_time)
                 
                 # 測試是否可以關閉
                 if self.vscode_controller.close_current_project(force=False):
@@ -429,9 +460,19 @@ class HybridUIAutomationScript:
                 else:
                     if attempt < max_attempts - 1:
                         self.logger.info("VS Code 無法正常關閉，可能 Copilot 仍在回應中，等待後重試...")
-                        time.sleep(5)  # 增加等待時間
+                        time.sleep(5 + (attempt * 3 if is_iteration_mode else 0))  # 漸進式增加等待時間
                         continue
                     else:
+                        # 最後一次嘗試前再等待一段時間
+                        if is_iteration_mode:
+                            self.logger.info("最後嘗試前額外等待 10 秒...")
+                            time.sleep(10)
+                            
+                            # 再試一次優雅關閉
+                            if self.vscode_controller.close_current_project(force=False):
+                                self.logger.info("✅ 最後嘗試成功關閉 VS Code")
+                                return True
+                                
                         self.logger.warning("達到最大重試次數，強制關閉 VS Code")
                         return self.vscode_controller.close_current_project(force=True)
             

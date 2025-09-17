@@ -94,6 +94,16 @@ class VSCodeController:
             # except Exception as e:
             #     self.logger.debug(f"Alt+F4 失敗: {str(e)}")
 
+            # 檢查是否處於多輪互動模式
+            is_iteration_mode = False
+            try:
+                from config.config import config
+                is_iteration_mode = config.INTERACTION_ENABLED and config.INTERACTION_MAX_ROUNDS > 1
+                self.logger.debug(f"多輪互動模式檢測: {is_iteration_mode} (啟用: {config.INTERACTION_ENABLED}, 最大輪數: {config.INTERACTION_MAX_ROUNDS})")
+            except Exception as e:
+                self.logger.debug(f"多輪互動模式檢測失敗: {str(e)}")
+                is_iteration_mode = False
+
             # 只關閉自動開啟的 VS Code 進程
             self.logger.debug("開始掃描 VS Code 進程...")
             vscode_processes = []
@@ -104,16 +114,55 @@ class VSCodeController:
 
             # 強制終止自動開啟的 VS Code 進程
             self.logger.debug("開始強制終止自動開啟的 VS Code 進程...")
-            for proc in vscode_processes:
-                try:
-                    proc.terminate()
-                    self.logger.debug(f"終止自動開啟的 VS Code 進程: {proc.info['pid']}")
-                except Exception as e:
-                    self.logger.debug(f"終止進程 {proc.info['pid']} 失敗: {str(e)}")
+            
+            # 多輪互動模式下使用分階段終止
+            if is_iteration_mode and len(vscode_processes) > 0:
+                self.logger.info("多輪互動模式下使用分階段終止策略...")
+                
+                # 第一階段：嘗試溫和終止 (terminate)
+                for proc in vscode_processes:
+                    try:
+                        proc.terminate()
+                        self.logger.debug(f"溫和終止自動開啟的 VS Code 進程: {proc.info['pid']}")
+                    except Exception as e:
+                        self.logger.debug(f"溫和終止進程 {proc.info['pid']} 失敗: {str(e)}")
+                
+                # 等待進程響應溫和終止信號
+                wait_time = 5
+                self.logger.debug(f"等待進程響應溫和終止信號 ({wait_time}秒)...")
+                time.sleep(wait_time)
+                
+                # 檢查哪些進程仍在運行
+                still_running = []
+                for proc in vscode_processes:
+                    try:
+                        if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                            still_running.append(proc)
+                    except:
+                        pass
+                
+                # 第二階段：強制終止 (kill) 仍在運行的進程
+                if still_running:
+                    self.logger.debug(f"仍有 {len(still_running)} 個進程未響應溫和終止，嘗試強制終止...")
+                    for proc in still_running:
+                        try:
+                            proc.kill()
+                            self.logger.debug(f"強制終止頑固進程: {proc.info['pid']}")
+                        except Exception as e:
+                            self.logger.debug(f"強制終止進程 {proc.info['pid']} 失敗: {str(e)}")
+            else:
+                # 標準終止流程
+                for proc in vscode_processes:
+                    try:
+                        proc.terminate()
+                        self.logger.debug(f"終止自動開啟的 VS Code 進程: {proc.info['pid']}")
+                    except Exception as e:
+                        self.logger.debug(f"終止進程 {proc.info['pid']} 失敗: {str(e)}")
 
             # 等待進程完全終止
-            self.logger.debug("等待進程完全終止（3秒）...")
-            time.sleep(3)
+            wait_time = 5 if is_iteration_mode else 3
+            self.logger.debug(f"等待進程完全終止（{wait_time}秒）...")
+            time.sleep(wait_time)
             self.logger.debug("等待完成，開始最後檢查...")
 
             # 最後檢查
@@ -126,6 +175,37 @@ class VSCodeController:
                 return True
             else:
                 self.logger.warning(f"⚠️ 部分自動開啟的 VS Code 實例仍在運行: {still_running}")
+                
+                # 多輪互動模式下進行最後強制嘗試
+                if is_iteration_mode:
+                    self.logger.info("多輪互動模式下進行最後的強制終止嘗試...")
+                    
+                    # 使用系統命令強制終止頑固進程
+                    for pid in still_running:
+                        try:
+                            if sys.platform == 'win32':
+                                # Windows
+                                os.system(f"taskkill /F /PID {pid}")
+                            else:
+                                # Linux/MacOS
+                                os.system(f"kill -9 {pid}")
+                            self.logger.debug(f"使用系統命令強制終止進程: {pid}")
+                        except Exception as e:
+                            self.logger.debug(f"使用系統命令終止進程 {pid} 失敗: {str(e)}")
+                    
+                    # 最後等待
+                    time.sleep(3)
+                    
+                    # 再次檢查
+                    final_running = [proc.info['pid'] for proc in psutil.process_iter(['pid', 'name']) if 'code' in proc.info['name'].lower() and proc.info['pid'] not in self.pre_existing_vscode_pids]
+                    if not final_running:
+                        self.logger.info("✅ 最終強制終止成功")
+                        self.current_project_path = None
+                        self.vscode_process = None
+                        return True
+                    else:
+                        self.logger.error(f"❌ 最終強制終止失敗，仍有進程在運行: {final_running}")
+                
                 return False
                 
         except Exception as e:
@@ -537,7 +617,6 @@ class VSCodeController:
             time.sleep(0.5)
             
             self.logger.debug("VS Code 視窗已聚焦")
-            return True
             return True
             
         except Exception as e:

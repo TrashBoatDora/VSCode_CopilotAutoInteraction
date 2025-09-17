@@ -1,0 +1,51 @@
+2025-09-17 03:38:43,549 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,550 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-17 03:38:43,557 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,563 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {10752, 10976, 12800, 2212, 7608, 3308, 5740, 4792, 596, 5460, 8052, 3160}
+2025-09-17 03:38:43,705 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,718 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-17 03:38:43,727 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,728 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-17 03:38:43,911 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,915 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-17 03:38:43,936 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,946 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-17 03:38:43,970 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:43,976 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-17 03:38:43,999 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250917_033843.log
+2025-09-17 03:38:44,499 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-17 03:38:44,501 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-17 03:38:47,301 - MainController - INFO - 使用者選擇執行專案狀態重置
+2025-09-17 03:38:47,749 - MainController - INFO - 使用者選擇啟用智能等待功能
+2025-09-17 03:38:47,750 - MainController - INFO - 執行前置檢查...
+2025-09-17 03:38:52,765 - MainController - INFO - ✅ 前置檢查完成
+2025-09-17 03:38:52,847 - MainController - INFO - 總共發現 2 個專案
+2025-09-17 03:38:52,848 - MainController - INFO - 待處理專案: 2 個
+2025-09-17 03:38:52,851 - MainController - INFO - 將分 1 批處理
+2025-09-17 03:38:52,851 - MainController - INFO - ========================= 處理第 1/1 批 ========================
+2025-09-17 03:38:52,852 - MainController - INFO - 處理專案 1/2: sample_project
+2025-09-17 03:41:26,079 - MainController - INFO - 結果檔案驗證 - 目錄存在: True, 舊格式檔案: True, 新格式檔案: True
+2025-09-17 03:41:26,080 - MainController - INFO - 多輪互動模式，進行額外的穩定期等待...
+2025-09-17 03:41:34,083 - MainController - INFO - 使用智能等待模式，進行最後確認...
+2025-09-17 03:41:34,084 - MainController - INFO - 最後確認 Copilot 回應...
+2025-09-17 03:41:40,877 - MainController - INFO - ✅ 確認收到完整回應 (5022 字元)
+2025-09-17 03:41:40,877 - MainController - INFO - 等待 3 秒確保所有操作完成...
+2025-09-17 03:41:48,018 - MainController - INFO - 處理專案 2/2: sample_project_2
+2025-09-17 03:44:29,748 - MainController - INFO - 結果檔案驗證 - 目錄存在: True, 舊格式檔案: True, 新格式檔案: True
+2025-09-17 03:44:29,752 - MainController - INFO - 多輪互動模式，進行額外的穩定期等待...
+2025-09-17 03:44:37,756 - MainController - INFO - 使用智能等待模式，進行最後確認...
+2025-09-17 03:44:37,757 - MainController - INFO - 最後確認 Copilot 回應...
+2025-09-17 03:44:44,498 - MainController - INFO - ✅ 確認收到完整回應 (6806 字元)
+2025-09-17 03:44:44,499 - MainController - INFO - 等待 3 秒確保所有操作完成...
+2025-09-17 03:44:51,660 - MainController - INFO - 第 1 批完成: 成功 2, 失敗 0, 耗時 358.8秒
+2025-09-17 03:44:51,663 - MainController - INFO - 沒有需要重試的專案
+2025-09-17 03:44:51,663 - MainController - INFO - ========================= 執行完成摘要 ===========================
+2025-09-17 03:44:51,664 - MainController - INFO - 📊 批次處理完成:
+2025-09-17 03:44:51,665 - MainController - INFO -    總專案數: 2
+2025-09-17 03:44:51,665 - MainController - INFO -    成功: 2
+2025-09-17 03:44:51,666 - MainController - INFO -    失敗: 0
+2025-09-17 03:44:51,675 - MainController - INFO -    成功率: 100.0%
+2025-09-17 03:44:51,676 - MainController - INFO -    總耗時: 367.16秒
+2025-09-17 03:44:51,707 - MainController - INFO - 詳細報告已儲存: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\AutomationReport\automation_report_20250917_034451.json
+2025-09-17 03:44:51,708 - MainController - INFO - 清理執行環境...
+2025-09-17 03:44:56,718 - MainController - INFO - ✅ 環境清理完成

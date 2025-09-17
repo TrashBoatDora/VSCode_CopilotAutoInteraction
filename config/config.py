@@ -65,6 +65,11 @@ class Config:
     BATCH_SIZE = 100        # 每批處理專案數量
     MAX_RETRY_ATTEMPTS = 3  # 失敗重試次數
     
+    # 反覆互動設定
+    INTERACTION_MAX_ROUNDS = 3      # 最大互動輪數
+    INTERACTION_ENABLED = True      # 是否啟用反覆互動功能
+    INTERACTION_ROUND_DELAY = 2     # 每輪互動間隔時間（秒）
+    
     # 日誌設定
     LOG_LEVEL = "INFO"      # 日誌等級：DEBUG, INFO, WARNING, ERROR
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

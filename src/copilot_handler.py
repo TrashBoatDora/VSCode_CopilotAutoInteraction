@@ -354,7 +354,7 @@ class CopilotHandler:
     
     def _try_copy_response_without_logging(self) -> str:
         """
-        嘗試複製 Copilot 的回應內容 (用於智能等待，穩定版)
+        嘗試複製 Copilot 的回應內容 (用於智能等待，簡化版本)
         
         Returns:
             str: 回應內容，若複製失敗則返回空字串
@@ -372,26 +372,33 @@ class CopilotHandler:
             pyperclip.copy(test_marker)
             time.sleep(0.5)
             
-            # 多種方法嘗試複製
-            methods = [
-                self._try_copy_method_context_menu,
-                self._try_copy_method_keyboard_only,
-                self._try_copy_method_alternative
-            ]
+            # 使用統一的複製方法
+            # 1. Ctrl+Shift+I 聚焦到 Copilot Chat 輸入框
+            pyautogui.hotkey('ctrl', 'shift', 'i')
+            time.sleep(1)
             
-            for i, method in enumerate(methods):
-                try:
-                    self.logger.debug(f"嘗試複製方法 {i + 1}/{len(methods)}")
-                    response = method()
-                    
-                    if response and response != test_marker and len(response.strip()) > 20:
-                        # 驗證內容是否像是 Copilot 回應
-                        if self._validate_response_content(response):
-                            return response
-                        
-                except Exception as e:
-                    self.logger.debug(f"複製方法 {i + 1} 失敗: {e}")
-                    continue
+            # 2. Ctrl+↑ 聚焦到 Copilot 回應
+            pyautogui.hotkey('ctrl', 'up')
+            time.sleep(1)
+            
+            # 3. Shift+F10 開啟右鍵選單
+            pyautogui.hotkey('shift', 'f10')
+            time.sleep(1)
+            
+            # 4. 一次方向鍵下，定位到"複製"
+            pyautogui.press('down')
+            time.sleep(0.3)
+            
+            # 5. Enter 執行複製
+            pyautogui.press('enter')
+            time.sleep(2)
+            
+            response = pyperclip.paste()
+            
+            if response and response != test_marker and len(response.strip()) > 20:
+                # 驗證內容是否像是 Copilot 回應
+                if self._validate_response_content(response):
+                    return response
             
             return ""
             
@@ -404,80 +411,6 @@ class CopilotHandler:
                     pyperclip.copy(original_clipboard)
             except:
                 pass
-    
-    def _try_copy_method_context_menu(self) -> str:
-        """使用右鍵選單複製"""
-        # 確保 VS Code 處於活動狀態
-        pyautogui.click(500, 300)
-        time.sleep(0.3)
-        
-        # 聚焦到 Copilot Chat
-        pyautogui.hotkey('ctrl', 'shift', 'i')
-        time.sleep(1.0)
-        
-        # 聚焦到回應區域
-        pyautogui.hotkey('ctrl', 'up')
-        time.sleep(1.0)
-        
-        # 選擇所有內容
-        pyautogui.hotkey('ctrl', 'a')
-        time.sleep(0.5)
-        
-        # 開啟右鍵選單
-        pyautogui.hotkey('shift', 'f10')
-        time.sleep(0.8)
-        
-        # 選擇複製選項 (通常是第2個選項)
-        pyautogui.press('down')
-        time.sleep(0.3)
-        pyautogui.press('down')
-        time.sleep(0.3)
-        pyautogui.press('enter')
-        time.sleep(1.5)
-        
-        return pyperclip.paste()
-    
-    def _try_copy_method_keyboard_only(self) -> str:
-        """使用純鍵盤操作複製"""
-        # 確保 VS Code 活動
-        pyautogui.hotkey('alt', 'tab')
-        time.sleep(0.5)
-        
-        # 聚焦到 Copilot Chat
-        pyautogui.hotkey('ctrl', 'shift', 'i')
-        time.sleep(1.0)
-        
-        # 跳轉到回應區域
-        pyautogui.hotkey('ctrl', 'up')
-        time.sleep(1.0)
-        
-        # 全選並複製
-        pyautogui.hotkey('ctrl', 'a')
-        time.sleep(0.5)
-        pyautogui.hotkey('ctrl', 'c')
-        time.sleep(1.5)
-        
-        return pyperclip.paste()
-    
-    def _try_copy_method_alternative(self) -> str:
-        """替代複製方法"""
-        # 重新聚焦到 VS Code
-        pyautogui.hotkey('ctrl', 'shift', 'i')
-        time.sleep(0.8)
-        
-        # 使用 Tab 導航到回應區域
-        pyautogui.press('tab')
-        time.sleep(0.3)
-        pyautogui.press('tab')
-        time.sleep(0.3)
-        
-        # 全選並複製
-        pyautogui.hotkey('ctrl', 'a')
-        time.sleep(0.5)
-        pyautogui.hotkey('ctrl', 'c')
-        time.sleep(1.2)
-        
-        return pyperclip.paste()
     
     def _validate_response_content(self, response: str) -> bool:
         """驗證複製的內容是否是有效的 Copilot 回應"""
@@ -527,9 +460,7 @@ class CopilotHandler:
                 pyautogui.hotkey('shift', 'f10')
                 time.sleep(1)
                 
-                # 4. 兩次方向鍵下，定位到"複製全部"
-                pyautogui.press('down')
-                time.sleep(0.3)
+                # 4. 一次方向鍵下，定位到"複製"
                 pyautogui.press('down')
                 time.sleep(0.3)
                 
@@ -594,7 +525,7 @@ class CopilotHandler:
             self.logger.error(f"測試 VS Code 關閉狀態時發生錯誤: {str(e)}")
             return False
     
-    def save_response_to_file(self, project_path: str, response: str = None, is_success: bool = True) -> bool:
+    def save_response_to_file(self, project_path: str, response: str = None, is_success: bool = True, **kwargs) -> bool:
         """
         將回應儲存到統一的 ExecutionResult 資料夾
         
@@ -602,6 +533,7 @@ class CopilotHandler:
             project_path: 專案路徑
             response: 回應內容，若為 None 則使用最後一次的回應
             is_success: 是否成功執行
+            **kwargs: 額外參數，如 round_number（互動輪數）
         
         Returns:
             bool: 儲存是否成功
@@ -626,20 +558,34 @@ class CopilotHandler:
             project_subdir = result_subdir / project_name
             project_subdir.mkdir(parents=True, exist_ok=True)
             
-            # 生成檔名（包含時間戳記，用於反覆互動的版本控制）
+            # 生成檔名（包含時間戳記和輪數，用於反覆互動的版本控制）
             timestamp = time.strftime('%Y%m%d_%H%M')
-            output_file = project_subdir / f"Copilot_AutoComplete_{timestamp}.md"
+            round_number = kwargs.get('round_number', 1)
+            output_file = project_subdir / f"{timestamp}_第{round_number}輪.md"
             
             self.logger.info(f"儲存回應到: {output_file}")
             
             # 創建檔案並寫入內容
+            round_number = kwargs.get('round_number', 1)
+            prompt_text = kwargs.get('prompt_text', "使用預設提示詞")
+            
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write("# Copilot 自動補全記錄\n")
                 f.write(f"# 生成時間: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"# 專案: {project_name}\n")
                 f.write(f"# 專案路徑: {project_path}\n")
+                f.write(f"# 互動輪數: 第 {round_number} 輪\n")
                 f.write(f"# 執行狀態: {'成功' if is_success else '失敗'}\n")
                 f.write("=" * 50 + "\n\n")
+                
+                # 添加使用的提示詞
+                f.write("## 本輪提示詞\n\n")
+                f.write("```\n")
+                f.write(prompt_text[:300] + (len(prompt_text) > 300 and "..." or ""))
+                f.write("\n```\n\n")
+                
+                # 添加回應內容
+                f.write("## Copilot 回應\n\n")
                 f.write(response)
             
             self.logger.copilot_interaction("儲存回應", "SUCCESS", f"檔案: {output_file.name}")
@@ -652,28 +598,34 @@ class CopilotHandler:
             self.logger.copilot_interaction("儲存回應", "ERROR", str(e))
             return False
     
-    def process_project_complete(self, project_path: str, use_smart_wait: bool = None) -> Tuple[bool, Optional[str]]:
+    def process_project_complete(self, project_path: str, use_smart_wait: bool = None, 
+                               round_number: int = 1, custom_prompt: str = None) -> Tuple[bool, Optional[str]]:
         """
         完整處理一個專案（發送提示 -> 等待回應 -> 複製並儲存）
         
         Args:
             project_path: 專案路徑
             use_smart_wait: 是否使用智能等待，若為 None 則使用配置值
+            round_number: 當前互動輪數
+            custom_prompt: 自定義提示詞，若為 None 則使用預設提示詞
             
         Returns:
             Tuple[bool, Optional[str]]: (是否成功, 錯誤訊息)
         """
         try:
             project_name = Path(project_path).name
-            self.logger.create_separator(f"處理專案: {project_name}")
+            self.logger.create_separator(f"處理專案: {project_name} (第 {round_number} 輪)")
             
             # 步驟1: 開啟 Copilot Chat
             if not self.open_copilot_chat():
                 return False, "無法開啟 Copilot Chat"
             
             # 步驟2: 發送提示詞
-            if not self.send_prompt():
+            if not self.send_prompt(prompt=custom_prompt):
                 return False, "無法發送提示詞"
+                
+            # 保存實際使用的提示詞，用於記錄
+            actual_prompt = custom_prompt or self._load_prompt_from_file()
             
             # 步驟3: 等待回應 (使用指定的等待模式)
             if not self.wait_for_response(use_smart_wait=use_smart_wait):
@@ -685,14 +637,20 @@ class CopilotHandler:
                 return False, "無法複製回應內容"
             
             # 步驟5: 儲存到檔案
-            if not self.save_response_to_file(project_path, response, is_success=True):
+            if not self.save_response_to_file(
+                project_path, 
+                response, 
+                is_success=True, 
+                round_number=round_number,
+                prompt_text=actual_prompt
+            ):
                 return False, "無法儲存回應到檔案"
             
             # 確保檔案寫入完成後再繼續（避免競爭條件）
             time.sleep(1)
             
-            self.logger.copilot_interaction("專案處理完成", "SUCCESS", project_name)
-            return True, None
+            self.logger.copilot_interaction(f"第 {round_number} 輪處理完成", "SUCCESS", project_name)
+            return True, response  # 返回成功狀態和回應內容，供後續輪次使用
             
         except Exception as e:
             error_msg = f"處理專案時發生錯誤: {str(e)}"
@@ -715,16 +673,204 @@ class CopilotHandler:
         """
         try:
             self.logger.info("清除 Copilot Chat 記錄...")
+            # 使用控制器進行記憶清除
+            from src.vscode_controller import vscode_controller
+            result = vscode_controller.clear_copilot_memory()
+            return result
+        except Exception as e:
+            self.logger.error(f"清除聊天記錄失敗: {str(e)}")
+            return False
             
-            # 透過關閉專案來清除記憶，達到記憶隔離的效果
-            self.is_chat_open = False
-            self.last_response = ""
+    def create_next_round_prompt(self, base_prompt: str, previous_response: str) -> str:
+        """
+        根據上一輪回應和原始提示詞組合成下一輪提示詞
+        
+        Args:
+            base_prompt: 基礎提示詞
+            previous_response: 上一輪的回應內容
             
-            self.logger.copilot_interaction("清除聊天記錄", "INFO", "透過關閉專案來清除記憶")
-            return True
+        Returns:
+            str: 新的提示詞
+        """
+        # 添加前綴提示
+        next_prompt = f"""我們繼續基於前一次的討論。你的上一次回答是：
+
+{previous_response}
+
+現在，請針對以下問題或指示繼續：
+
+{base_prompt}
+
+請記住前面的對話脈絡，繼續深入探討或回答問題。"""
+        
+        return next_prompt
+    
+    def get_latest_response_file(self, project_path: str) -> Optional[Path]:
+        """
+        獲取指定專案的最新回應檔案
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            Optional[Path]: 檔案路徑，若無檔案則返回 None
+        """
+        try:
+            project_name = Path(project_path).name
+            script_root = Path(__file__).parent.parent  # 腳本根目錄
+            project_result_dir = script_root / "ExecutionResult" / "Success" / project_name
+            
+            if not project_result_dir.exists():
+                return None
+            
+            # 找出所有回應檔案
+            response_files = list(project_result_dir.glob("*_第*輪.md"))
+            
+            if not response_files:
+                return None
+                
+            # 根據修改時間排序，取最新的
+            latest_file = max(response_files, key=lambda f: f.stat().st_mtime)
+            return latest_file
             
         except Exception as e:
-            self.logger.copilot_interaction("清除聊天記錄", "ERROR", str(e))
+            self.logger.error(f"獲取最新回應檔案失敗: {str(e)}")
+            return None
+            
+    def read_previous_response(self, project_path: str) -> Optional[str]:
+        """
+        讀取上一輪的回應內容
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            Optional[str]: 上一輪的回應內容，若無法讀取則返回 None
+        """
+        try:
+            latest_file = self.get_latest_response_file(project_path)
+            if not latest_file:
+                return None
+                
+            # 讀取檔案內容
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # 提取 Copilot 回應部分
+            response_marker = "## Copilot 回應\n\n"
+            if response_marker in content:
+                response = content.split(response_marker)[1]
+                return response
+                
+            # 舊格式檔案處理
+            separator = "=" * 50 + "\n\n"
+            if separator in content:
+                response = content.split(separator)[1]
+                return response
+                
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"讀取上一輪回應失敗: {str(e)}")
+            return None
+    
+    def process_project_with_iterations(self, project_path: str, max_rounds: int = None) -> bool:
+        """
+        處理一個專案的多輪互動
+        
+        Args:
+            project_path: 專案路徑
+            max_rounds: 最大互動輪數
+            
+        Returns:
+            bool: 處理是否成功
+        """
+        try:
+            if max_rounds is None:
+                max_rounds = config.INTERACTION_MAX_ROUNDS
+                
+            project_name = Path(project_path).name
+            self.logger.create_separator(f"開始處理專案 {project_name}，計劃互動 {max_rounds} 輪")
+            
+            # 讀取基礎提示詞
+            base_prompt = self._load_prompt_from_file()
+            if not base_prompt:
+                self.logger.error("無法讀取基礎提示詞")
+                return False
+            
+            # 追蹤每一輪的成功狀態
+            success_count = 0
+            last_response = None
+            
+            # 進行多輪互動
+            for round_num in range(1, max_rounds + 1):
+                self.logger.create_separator(f"開始第 {round_num} 輪互動")
+                
+                # 根據上一輪結果準備本輪提示詞
+                current_prompt = base_prompt
+                if round_num > 1 and last_response:
+                    current_prompt = self.create_next_round_prompt(base_prompt, last_response)
+                    # 清除 Copilot 記憶（每輪獨立）
+                    from src.vscode_controller import vscode_controller
+                    vscode_controller.clear_copilot_memory()
+                    time.sleep(1)  # 等待記憶清除完成
+                
+                # 處理本輪互動
+                success, result = self.process_project_complete(
+                    project_path, 
+                    use_smart_wait=None,
+                    round_number=round_num,
+                    custom_prompt=current_prompt
+                )
+                
+                if success:
+                    success_count += 1
+                    last_response = result
+                    self.logger.info(f"✅ 第 {round_num} 輪互動成功")
+                else:
+                    self.logger.error(f"❌ 第 {round_num} 輪互動失敗: {result}")
+                    break
+                
+                # 輪次間暫停
+                if round_num < max_rounds:
+                    pause_time = config.INTERACTION_ROUND_DELAY
+                    self.logger.info(f"等待 {pause_time} 秒後進行下一輪...")
+                    time.sleep(pause_time)
+            
+            # 處理結束
+            total_result = f"完成 {success_count}/{max_rounds} 輪互動"
+            
+            # 互動完成後的穩定期，確保背景任務完成
+            cooldown_time = 5  # 秒
+            self.logger.info(f"所有互動輪次完成，進入穩定期 {cooldown_time} 秒...")
+            time.sleep(cooldown_time)
+            
+            # 如果全部成功，創建一個兼容舊版的標記檔案
+            if success_count == max_rounds:
+                try:
+                    # 建立兼容標記檔案
+                    project_name = Path(project_path).name
+                    script_root = Path(__file__).parent.parent  # 腳本根目錄
+                    project_result_dir = script_root / "ExecutionResult" / "Success" / project_name
+                    project_result_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 創建舊格式標記檔案 (確保驗證通過)
+                    compat_file = project_result_dir / f"Copilot_AutoComplete_{time.strftime('%Y%m%d_%H%M%S')}.md"
+                    with open(compat_file, 'w', encoding='utf-8') as f:
+                        f.write(f"# 多輪互動成功標記檔案 ({max_rounds}輪)\n\n")
+                        f.write(f"本檔案為自動生成的兼容標記，表示專案 {project_name} 已成功完成 {max_rounds} 輪互動。\n")
+                        f.write(f"詳細互動結果請查看 *_第N輪.md 檔案。\n")
+                except Exception as e:
+                    self.logger.warning(f"創建兼容標記檔案失敗: {str(e)}")
+                
+                self.logger.info(f"✅ {project_name} 所有互動輪次成功完成")
+                return True
+            else:
+                self.logger.warning(f"⚠️ {project_name} 只完成部分互動: {total_result}")
+                return success_count > 0  # 至少完成一輪即為部分成功
+                
+        except Exception as e:
+            self.logger.error(f"專案互動處理出錯: {str(e)}")
             return False
 
 # 創建全域實例
@@ -742,3 +888,8 @@ def send_copilot_prompt(prompt: str = None) -> bool:
 def wait_for_copilot_response(timeout: int = None, use_smart_wait: bool = None) -> bool:
     """等待回應的便捷函數"""
     return copilot_handler.wait_for_response(timeout, use_smart_wait)
+    
+def process_with_iterations(project_path: str, max_rounds: int = None) -> bool:
+    """多輪互動處理的便捷函數"""
+    return copilot_handler.process_project_with_iterations(project_path, max_rounds)
+    return copilot_handler.process_project_with_iterations(project_path, max_rounds)
