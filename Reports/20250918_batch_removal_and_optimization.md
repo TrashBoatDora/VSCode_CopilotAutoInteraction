@@ -30,11 +30,8 @@
     3. 全部處理完畢後結束
 - 經測試，主程式可正常運作，無任何批次相關 bug
 
-### 4. Copilot Chat prompt 串接機制簡化
-- **`copilot_handler.py`**：
-    - `create_next_round_prompt` 移除所有自動前綴（prefix）、後綴（suffix）與固定說明文字，
-      現在只會將上一輪 Copilot 回應與 prompt2.txt 內容直接串接。
-    - 使用者可完全透過 prompt2.txt 內容與 UI 設定，決定每輪 prompt 的真實格式與內容，
-      不再有任何自動加料或隱藏字串。
+---
 
+**本次優化後，腳本結構更單純，維護性提升，使用者體驗更直觀。**
 
+> 2025-09-18 by GitHub Copilot

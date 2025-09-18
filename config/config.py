@@ -18,7 +18,10 @@ class Config:
     PROJECTS_DIR = PROJECT_ROOT / "projects"
     
     # 提示詞檔案路徑
-    PROMPT_FILE_PATH = PROJECT_ROOT / "prompt.txt"
+    PROMPTS_DIR = PROJECT_ROOT / "prompts"
+    PROMPT_FILE_PATH = PROJECT_ROOT / "prompt.txt"  # 保持向後相容性
+    PROMPT1_FILE_PATH = PROMPTS_DIR / "prompt1.txt"  # 第一輪互動使用
+    PROMPT2_FILE_PATH = PROMPTS_DIR / "prompt2.txt"  # 第二輪以後互動使用
     
     # VS Code 相關設定
     VSCODE_EXECUTABLE = r"C:\Users\C250\AppData\Local\Programs\Microsoft VS Code\Code.exe"  # VS Code 可執行檔路徑
@@ -98,7 +101,7 @@ class Config:
     @classmethod
     def ensure_directories(cls):
         """確保所有必要目錄存在"""
-        directories = [cls.LOGS_DIR, cls.ASSETS_DIR, cls.PROJECTS_DIR]
+        directories = [cls.LOGS_DIR, cls.ASSETS_DIR, cls.PROJECTS_DIR, cls.PROMPTS_DIR]
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
     
@@ -134,6 +137,21 @@ class Config:
     def validate_prompt_file(cls):
         """驗證提示詞檔案是否存在"""
         return cls.PROMPT_FILE_PATH.exists()
+    
+    @classmethod
+    def validate_prompt_files(cls):
+        """驗證新的多輪提示詞檔案是否存在"""
+        prompt1_exists = cls.PROMPT1_FILE_PATH.exists()
+        prompt2_exists = cls.PROMPT2_FILE_PATH.exists()
+        return prompt1_exists, prompt2_exists
+    
+    @classmethod
+    def get_prompt_file_path(cls, round_number: int = 1):
+        """根據輪數取得對應的提示詞檔案路徑"""
+        if round_number == 1:
+            return cls.PROMPT1_FILE_PATH
+        else:
+            return cls.PROMPT2_FILE_PATH
 
 # 單例配置實例
 config = Config()

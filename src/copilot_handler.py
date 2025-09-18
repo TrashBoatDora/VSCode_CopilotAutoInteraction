@@ -57,12 +57,13 @@ class CopilotHandler:
             self.logger.copilot_interaction("開啟 Chat 面板", "ERROR", str(e))
             return False
     
-    def send_prompt(self, prompt: str = None) -> bool:
+    def send_prompt(self, prompt: str = None, round_number: int = 1) -> bool:
         """
         發送提示詞到 Copilot Chat (使用鍵盤操作)
         
         Args:
-            prompt: 自定義提示詞，若為 None 則從 prompt.txt 讀取
+            prompt: 自定義提示詞，若為 None 則從對應輪數的 prompt 檔案讀取
+            round_number: 互動輪數，決定使用哪個 prompt 檔案
             
         Returns:
             bool: 發送是否成功
@@ -70,7 +71,7 @@ class CopilotHandler:
         try:
             # 讀取提示詞
             if prompt is None:
-                prompt = self._load_prompt_from_file()
+                prompt = self._load_prompt_from_file(round_number)
                 if not prompt:
                     self.logger.error("無法讀取提示詞檔案")
                     return False
@@ -104,29 +105,29 @@ class CopilotHandler:
             self.logger.copilot_interaction("發送提示詞", "ERROR", str(e))
             return False
     
-    def _load_prompt_from_file(self) -> Optional[str]:
+    def _load_prompt_from_file(self, round_number: int = 1) -> Optional[str]:
         """
-        從 prompt.txt 檔案讀取提示詞
+        從 prompt 檔案讀取提示詞
+        
+        Args:
+            round_number: 互動輪數，第1輪使用 prompt1.txt，第2輪以後使用 prompt2.txt
         
         Returns:
             Optional[str]: 提示詞內容，讀取失敗則返回 None
         """
         try:
-            prompt_file = Path(config.PROMPT_FILE_PATH)
-            if not prompt_file.exists():
-                self.logger.error(f"提示詞檔案不存在: {prompt_file}")
+            # 根據輪數選擇對應的 prompt 檔案
+            prompt_file_path = config.get_prompt_file_path(round_number)
+            if not prompt_file_path.exists():
+                self.logger.error(f"提示詞檔案不存在: {prompt_file_path}")
                 return None
-            
-            with open(prompt_file, 'r', encoding='utf-8') as f:
+            with open(prompt_file_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-            
             if not content:
                 self.logger.error("提示詞檔案為空")
                 return None
-            
-            self.logger.debug(f"成功讀取提示詞檔案: {len(content)} 字元")
+            self.logger.debug(f"成功讀取提示詞檔案 ({prompt_file_path.name}): {len(content)} 字元")
             return content
-            
         except Exception as e:
             self.logger.error(f"讀取提示詞檔案失敗: {str(e)}")
             return None
@@ -621,11 +622,11 @@ class CopilotHandler:
                 return False, "無法開啟 Copilot Chat"
             
             # 步驟2: 發送提示詞
-            if not self.send_prompt(prompt=custom_prompt):
+            if not self.send_prompt(prompt=custom_prompt, round_number=round_number):
                 return False, "無法發送提示詞"
                 
             # 保存實際使用的提示詞，用於記錄
-            actual_prompt = custom_prompt or self._load_prompt_from_file()
+            actual_prompt = custom_prompt or self._load_prompt_from_file(round_number)
             
             # 步驟3: 等待回應 (使用指定的等待模式)
             if not self.wait_for_response(use_smart_wait=use_smart_wait):
@@ -692,23 +693,13 @@ class CopilotHandler:
         Returns:
             str: 新的提示詞
         """
-        # 確保 previous_response 不為空且有實際內容
+        # 僅將上一輪回應與 base_prompt 直接串接，完全由 prompt2.txt 控制格式
         if not previous_response or len(previous_response.strip()) < 10:
             self.logger.warning("上一輪回應內容過短或為空，使用基礎提示詞")
             return base_prompt
-        
-        # 清理 previous_response，移除可能的格式問題
         cleaned_response = previous_response.strip()
-        
-        # 使用配置中的前綴和後綴
-        prefix = config.INTERACTION_RESPONSE_CHAINING_PREFIX
-        suffix = config.INTERACTION_RESPONSE_CHAINING_SUFFIX
-        continuation_text = "\n請記住前面的對話脈絡，繼續深入探討或回答問題。"
-        
-        # 組合新的提示詞
-        next_prompt = f"{prefix}{cleaned_response}{suffix}{base_prompt}{continuation_text}"
-        
-        return next_prompt
+        # 直接由 prompt2.txt 內容與上一輪回應組成，無自動前後綴
+        return f"{cleaned_response}\n{base_prompt}"
     
     def _read_previous_round_response(self, project_path: str, round_number: int) -> Optional[str]:
         """
@@ -891,10 +882,10 @@ class CopilotHandler:
             self.logger.create_separator(f"開始處理專案 {project_name}，計劃互動 {max_rounds} 輪")
             self.logger.info(f"回應串接功能: {'啟用' if include_previous_response else '停用'}")
             
-            # 讀取基礎提示詞
-            base_prompt = self._load_prompt_from_file()
+            # 讀取基礎提示詞（第一輪）
+            base_prompt = self._load_prompt_from_file(round_number=1)
             if not base_prompt:
-                self.logger.error("無法讀取基礎提示詞")
+                self.logger.error("無法讀取第一輪基礎提示詞")
                 return False
             
             # 追蹤每一輪的成功狀態
@@ -905,20 +896,31 @@ class CopilotHandler:
             for round_num in range(1, max_rounds + 1):
                 self.logger.create_separator(f"開始第 {round_num} 輪互動")
                 
-                # 根據設定和上一輪結果準備本輪提示詞
-                current_prompt = base_prompt
-                if round_num > 1 and include_previous_response:
-                    # 從上一輪的檔案中讀取實際的 Copilot 回應內容
-                    previous_response_content = self._read_previous_round_response(project_path, round_num - 1)
-                    if previous_response_content:
-                        current_prompt = self.create_next_round_prompt(base_prompt, previous_response_content)
-                        self.logger.info(f"已讀取第 {round_num - 1} 輪回應內容用於組合新提示詞 (內容長度: {len(previous_response_content)} 字元)")
-                    else:
-                        self.logger.warning(f"無法讀取第 {round_num - 1} 輪回應內容，使用基礎提示詞")
-                        current_prompt = base_prompt
-                elif round_num > 1 and not include_previous_response:
-                    self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用基礎提示詞")
+                # 根據輪數和設定準備本輪提示詞
+                if round_num == 1:
+                    # 第一輪：使用 prompt1.txt
                     current_prompt = base_prompt
+                    self.logger.info(f"第 {round_num} 輪：使用第一輪提示詞 (prompt1.txt)")
+                else:
+                    # 第二輪以後：使用 prompt2.txt
+                    round2_prompt = self._load_prompt_from_file(round_number=2)
+                    if not round2_prompt:
+                        self.logger.warning("無法讀取第二輪提示詞，使用第一輪提示詞")
+                        round2_prompt = base_prompt
+                    
+                    current_prompt = round2_prompt
+                    self.logger.info(f"第 {round_num} 輪：使用第二輪提示詞 (prompt2.txt)")
+                    
+                    # 如果設定要串接上一輪回應
+                    if include_previous_response:
+                        previous_response_content = self._read_previous_round_response(project_path, round_num - 1)
+                        if previous_response_content:
+                            current_prompt = self.create_next_round_prompt(round2_prompt, previous_response_content)
+                            self.logger.info(f"已讀取第 {round_num - 1} 輪回應內容用於組合新提示詞 (內容長度: {len(previous_response_content)} 字元)")
+                        else:
+                            self.logger.warning(f"無法讀取第 {round_num - 1} 輪回應內容，僅使用第二輪基礎提示詞")
+                    else:
+                        self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞")
                 
                 if round_num > 1:
                     # 清除 Copilot 記憶（每輪獨立）

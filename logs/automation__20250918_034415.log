@@ -1,0 +1,21 @@
+2025-09-18 03:44:15,831 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_034415.log
+2025-09-18 03:44:15,918 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_034415.log
+2025-09-18 03:44:15,919 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 03:44:28,447 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project
+2025-09-18 03:44:28,449 - HybridUIAutomation - INFO - [sample_project] 開始處理專案
+2025-09-18 03:44:28,479 - HybridUIAutomation - INFO - [sample_project] 開啟 VS Code 專案
+2025-09-18 03:44:41,800 - HybridUIAutomation - INFO - [sample_project] 清除 Copilot Chat 記憶
+2025-09-18 03:44:45,645 - HybridUIAutomation - INFO - [sample_project] 處理 Copilot Chat (啟用反覆互動功能，最大輪數: 2)
+2025-09-18 03:46:41,748 - HybridUIAutomation - INFO - [sample_project] 驗證處理結果
+2025-09-18 03:46:41,761 - HybridUIAutomation - INFO - [sample_project] 智能關閉專案並清除記憶
+2025-09-18 03:47:01,301 - HybridUIAutomation - INFO - [sample_project] 專案處理完成
+2025-09-18 03:47:01,309 - HybridUIAutomation - INFO - ✅ 專案處理成功: sample_project (耗時: 152.87秒)
+2025-09-18 03:47:03,325 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project_2
+2025-09-18 03:47:03,326 - HybridUIAutomation - INFO - [sample_project_2] 開始處理專案
+2025-09-18 03:47:03,334 - HybridUIAutomation - INFO - [sample_project_2] 開啟 VS Code 專案
+2025-09-18 03:47:16,612 - HybridUIAutomation - INFO - [sample_project_2] 清除 Copilot Chat 記憶
+2025-09-18 03:47:20,435 - HybridUIAutomation - INFO - [sample_project_2] 處理 Copilot Chat (啟用反覆互動功能，最大輪數: 2)
+2025-09-18 03:49:05,520 - HybridUIAutomation - INFO - [sample_project_2] 驗證處理結果
+2025-09-18 03:49:05,527 - HybridUIAutomation - INFO - [sample_project_2] 智能關閉專案並清除記憶
+2025-09-18 03:49:25,018 - HybridUIAutomation - INFO - [sample_project_2] 專案處理完成
+2025-09-18 03:49:25,035 - HybridUIAutomation - INFO - ✅ 專案處理成功: sample_project_2 (耗時: 141.72秒)

@@ -1,0 +1,20 @@
+2025-09-18 03:56:25,146 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,220 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,221 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 03:56:25,852 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,853 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-18 03:56:25,857 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,862 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {7296, 3140, 1384, 7148, 7724, 10188, 4784, 8944, 10192, 1396, 2068, 8340, 8700, 6424, 9428, 8412}
+2025-09-18 03:56:25,959 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,960 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 03:56:25,965 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_035625.log
+2025-09-18 03:56:25,966 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 03:56:38,239 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project
+2025-09-18 03:56:38,240 - HybridUIAutomation - INFO - [sample_project] 開始處理專案
+2025-09-18 03:56:38,255 - HybridUIAutomation - INFO - [sample_project] 開啟 VS Code 專案
+2025-09-18 03:56:51,552 - HybridUIAutomation - INFO - [sample_project] 清除 Copilot Chat 記憶
+2025-09-18 03:56:55,381 - HybridUIAutomation - INFO - [sample_project] 處理 Copilot Chat (啟用反覆互動功能，最大輪數: 3)
+2025-09-18 03:59:04,404 - HybridUIAutomation - INFO - [sample_project] 驗證處理結果
+2025-09-18 03:59:04,414 - HybridUIAutomation - INFO - [sample_project] 智能關閉專案並清除記憶
+2025-09-18 03:59:23,955 - HybridUIAutomation - INFO - [sample_project] 專案處理完成
+2025-09-18 03:59:23,959 - HybridUIAutomation - INFO - ✅ 專案處理成功: sample_project (耗時: 165.73秒)

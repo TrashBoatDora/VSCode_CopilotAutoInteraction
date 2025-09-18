@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-09-18T03:19:03.299684",
+  "last_updated": "2025-09-18T04:12:25.930923",
   "projects": [
     {
       "name": "sample_project",
@@ -11,24 +11,9 @@
         "main.py",
         "Calculator.java"
       ],
-      "last_processed": "2025-09-18T03:17:29.163362",
+      "last_processed": "2025-09-18T04:12:25.930911",
       "error_message": null,
-      "processing_time": 75.97970724105835,
-      "retry_count": 0
-    },
-    {
-      "name": "sample_project_2",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project_2",
-      "status": "completed",
-      "has_copilot_file": true,
-      "file_count": 2,
-      "supported_files": [
-        "main.py",
-        "Calculator.java"
-      ],
-      "last_processed": "2025-09-18T03:19:03.299674",
-      "error_message": null,
-      "processing_time": 92.12190055847168,
+      "processing_time": 119.39563727378845,
       "retry_count": 0
     }
   ]
