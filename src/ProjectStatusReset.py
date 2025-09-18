@@ -17,48 +17,44 @@ if projects_dir.exists():
         except Exception as e:
             print(f"刪除 {file} 失敗: {e}")
 
+# 刪除 automation_status.json
 if status_file.exists():
-    with open(status_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    # 重設所有專案為 pending
-    for project in data['projects']:
-        project['status'] = 'pending'
-        project['retry_count'] = 0
-        project['error_message'] = None
-        project['last_processed'] = None
-        
-        # 清理專案目錄中的舊檔案（向後相容）
-        proj_path = Path(project['path'])
-        for fname in ["Copilot_AutoComplete.txt", "Copilot_AutoComplete.md", "Copilot_AutoComplete.report", "automation_log.txt"]:
-            fpath = proj_path / fname
-            if fpath.exists():
+    try:
+        status_file.unlink()
+        print(f"已刪除狀態檔案: {status_file}")
+    except Exception as e:
+        print(f"刪除 {status_file} 失敗: {e}")
+
+# 刪除統一的 ExecutionResult 資料夾
+if execution_result_dir.exists():
+    try:
+        shutil.rmtree(execution_result_dir)
+        print(f"已刪除統一的 ExecutionResult 資料夾: {execution_result_dir}")
+    except Exception as e:
+        print(f"刪除 {execution_result_dir} 失敗: {e}")
+
+# 清理專案目錄中的舊檔案（向後相容）
+projects_root = Path('projects')
+if projects_root.exists():
+    for project_dir in projects_root.iterdir():
+        if project_dir.is_dir() and project_dir.name != '__pycache__':
+            # 清理專案目錄中的舊檔案
+            for fname in ["Copilot_AutoComplete.txt", "Copilot_AutoComplete.md", "Copilot_AutoComplete.report", "automation_log.txt"]:
+                fpath = project_dir / fname
+                if fpath.exists():
+                    try:
+                        fpath.unlink()
+                        print(f"已刪除 {fpath}")
+                    except Exception as e:
+                        print(f"刪除 {fpath} 失敗: {e}")
+            
+            # 刪除專案內的舊 ExecutionResult 資料夾（向後相容）
+            old_execution_result = project_dir / "ExecutionResult"
+            if old_execution_result.exists():
                 try:
-                    fpath.unlink()
-                    print(f"已刪除 {fpath}")
+                    shutil.rmtree(old_execution_result)
+                    print(f"已刪除 {old_execution_result}")
                 except Exception as e:
-                    print(f"刪除 {fpath} 失敗: {e}")
-        
-        # 刪除專案內的舊 ExecutionResult 資料夾（向後相容）
-        old_execution_result = proj_path / "ExecutionResult"
-        if old_execution_result.exists():
-            try:
-                shutil.rmtree(old_execution_result)
-                print(f"已刪除 {old_execution_result}")
-            except Exception as e:
-                print(f"刪除 {old_execution_result} 失敗: {e}")
-    
-    # 刪除統一的 ExecutionResult 資料夾
-    if execution_result_dir.exists():
-        try:
-            shutil.rmtree(execution_result_dir)
-            print(f"已刪除統一的 ExecutionResult 資料夾: {execution_result_dir}")
-        except Exception as e:
-            print(f"刪除 {execution_result_dir} 失敗: {e}")
-    
-    with open(status_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    
-    print('✅ 所有專案狀態已重設為 pending，並清除統一的 ExecutionResult 資料夾')
-else:
-    print('❌ 狀態檔案不存在')
+                    print(f"刪除 {old_execution_result} 失敗: {e}")
+
+print('✅ 所有專案狀態和結果檔案已完全清除')

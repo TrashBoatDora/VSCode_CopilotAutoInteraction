@@ -22,13 +22,14 @@ from src.image_recognition import image_recognition
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
     
-    def __init__(self, error_handler=None):
+    def __init__(self, error_handler=None, interaction_settings=None):
         """初始化 Copilot 處理器"""
         self.logger = get_logger("CopilotHandler")
         self.is_chat_open = False
         self.last_response = ""
         self.error_handler = error_handler  # 添加 error_handler 引用
         self.image_recognition = image_recognition  # 添加圖像識別引用
+        self.interaction_settings = interaction_settings  # 添加外部設定支援
         self.logger.info("Copilot Chat 處理器初始化完成")
     
     def open_copilot_chat(self) -> bool:
@@ -580,9 +581,8 @@ class CopilotHandler:
                 
                 # 添加使用的提示詞
                 f.write("## 本輪提示詞\n\n")
-                f.write("```\n")
-                f.write(prompt_text[:300] + (len(prompt_text) > 300 and "..." or ""))
-                f.write("\n```\n\n")
+                f.write(prompt_text)
+                f.write("\n\n")
                 
                 # 添加回應內容
                 f.write("## Copilot 回應\n\n")
@@ -692,18 +692,68 @@ class CopilotHandler:
         Returns:
             str: 新的提示詞
         """
-        # 添加前綴提示
-        next_prompt = f"""我們繼續基於前一次的討論。你的上一次回答是：
-
-{previous_response}
-
-現在，請針對以下問題或指示繼續：
-
-{base_prompt}
-
-請記住前面的對話脈絡，繼續深入探討或回答問題。"""
+        # 確保 previous_response 不為空且有實際內容
+        if not previous_response or len(previous_response.strip()) < 10:
+            self.logger.warning("上一輪回應內容過短或為空，使用基礎提示詞")
+            return base_prompt
+        
+        # 清理 previous_response，移除可能的格式問題
+        cleaned_response = previous_response.strip()
+        
+        # 使用配置中的前綴和後綴
+        prefix = config.INTERACTION_RESPONSE_CHAINING_PREFIX
+        suffix = config.INTERACTION_RESPONSE_CHAINING_SUFFIX
+        continuation_text = "\n請記住前面的對話脈絡，繼續深入探討或回答問題。"
+        
+        # 組合新的提示詞
+        next_prompt = f"{prefix}{cleaned_response}{suffix}{base_prompt}{continuation_text}"
         
         return next_prompt
+    
+    def _read_previous_round_response(self, project_path: str, round_number: int) -> Optional[str]:
+        """
+        讀取指定輪數的 Copilot 回應內容
+        
+        Args:
+            project_path: 專案路徑
+            round_number: 要讀取的輪數
+            
+        Returns:
+            Optional[str]: Copilot 回應內容，如果讀取失敗則返回 None
+        """
+        try:
+            project_name = Path(project_path).name
+            script_root = Path(__file__).parent.parent
+            execution_result_dir = script_root / "ExecutionResult" / "Success" / project_name
+            
+            # 尋找該輪次的檔案（使用萬用字元匹配時間戳記）
+            pattern = f"*_第{round_number}輪.md"
+            matching_files = list(execution_result_dir.glob(pattern))
+            
+            if not matching_files:
+                self.logger.warning(f"找不到第 {round_number} 輪的回應檔案")
+                return None
+            
+            # 取最新的檔案（如果有多個）
+            latest_file = max(matching_files, key=lambda x: x.stat().st_mtime)
+            
+            # 讀取檔案內容並提取 Copilot 回應部分
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 提取 "## Copilot 回應" 之後的內容
+            response_marker = "## Copilot 回應\n\n"
+            if response_marker in content:
+                response_content = content.split(response_marker, 1)[1]
+                self.logger.debug(f"成功讀取第 {round_number} 輪回應內容 (長度: {len(response_content)} 字元)")
+                return response_content.strip()
+            else:
+                self.logger.warning(f"在第 {round_number} 輪檔案中找不到回應標記")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"讀取第 {round_number} 輪回應時發生錯誤: {str(e)}")
+            return None
     
     def get_latest_response_file(self, project_path: str) -> Optional[Path]:
         """
@@ -774,6 +824,41 @@ class CopilotHandler:
             self.logger.error(f"讀取上一輪回應失敗: {str(e)}")
             return None
     
+    def _load_interaction_settings(self) -> dict:
+        """
+        載入互動設定
+        
+        Returns:
+            dict: 互動設定字典
+        """
+        # 優先使用外部設定（來自 UI）
+        if self.interaction_settings is not None:
+            self.logger.info(f"使用外部提供的互動設定: {self.interaction_settings}")
+            return self.interaction_settings
+        
+        # 如果沒有外部設定，使用檔案或預設值
+        settings_file = config.PROJECT_ROOT / "config" / "interaction_settings.json"
+        default_settings = {
+            "interaction_enabled": config.INTERACTION_ENABLED,
+            "max_rounds": config.INTERACTION_MAX_ROUNDS,
+            "include_previous_response": config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE,
+            "round_delay": config.INTERACTION_ROUND_DELAY
+        }
+        
+        if settings_file.exists():
+            try:
+                import json
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    loaded_settings = json.load(f)
+                    default_settings.update(loaded_settings)
+                    self.logger.info(f"已載入互動設定檔案: {loaded_settings}")
+            except Exception as e:
+                self.logger.warning(f"載入互動設定時發生錯誤，使用預設值: {e}")
+        else:
+            self.logger.info("未找到互動設定檔案，使用預設值")
+        
+        return default_settings
+
     def process_project_with_iterations(self, project_path: str, max_rounds: int = None) -> bool:
         """
         處理一個專案的多輪互動
@@ -786,11 +871,25 @@ class CopilotHandler:
             bool: 處理是否成功
         """
         try:
+            # 載入互動設定
+            interaction_settings = self._load_interaction_settings()
+            
+            # 檢查是否啟用多輪互動
+            if not interaction_settings["interaction_enabled"]:
+                self.logger.info("多輪互動功能已停用，執行單輪互動")
+                success, result = self.process_project_complete(project_path, round_number=1)
+                return success
+            
+            # 使用設定中的參數
             if max_rounds is None:
-                max_rounds = config.INTERACTION_MAX_ROUNDS
+                max_rounds = interaction_settings["max_rounds"]
+            
+            round_delay = interaction_settings["round_delay"]
+            include_previous_response = interaction_settings["include_previous_response"]
                 
             project_name = Path(project_path).name
             self.logger.create_separator(f"開始處理專案 {project_name}，計劃互動 {max_rounds} 輪")
+            self.logger.info(f"回應串接功能: {'啟用' if include_previous_response else '停用'}")
             
             # 讀取基礎提示詞
             base_prompt = self._load_prompt_from_file()
@@ -806,10 +905,22 @@ class CopilotHandler:
             for round_num in range(1, max_rounds + 1):
                 self.logger.create_separator(f"開始第 {round_num} 輪互動")
                 
-                # 根據上一輪結果準備本輪提示詞
+                # 根據設定和上一輪結果準備本輪提示詞
                 current_prompt = base_prompt
-                if round_num > 1 and last_response:
-                    current_prompt = self.create_next_round_prompt(base_prompt, last_response)
+                if round_num > 1 and include_previous_response:
+                    # 從上一輪的檔案中讀取實際的 Copilot 回應內容
+                    previous_response_content = self._read_previous_round_response(project_path, round_num - 1)
+                    if previous_response_content:
+                        current_prompt = self.create_next_round_prompt(base_prompt, previous_response_content)
+                        self.logger.info(f"已讀取第 {round_num - 1} 輪回應內容用於組合新提示詞 (內容長度: {len(previous_response_content)} 字元)")
+                    else:
+                        self.logger.warning(f"無法讀取第 {round_num - 1} 輪回應內容，使用基礎提示詞")
+                        current_prompt = base_prompt
+                elif round_num > 1 and not include_previous_response:
+                    self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用基礎提示詞")
+                    current_prompt = base_prompt
+                
+                if round_num > 1:
                     # 清除 Copilot 記憶（每輪獨立）
                     from src.vscode_controller import vscode_controller
                     vscode_controller.clear_copilot_memory()
@@ -833,9 +944,8 @@ class CopilotHandler:
                 
                 # 輪次間暫停
                 if round_num < max_rounds:
-                    pause_time = config.INTERACTION_ROUND_DELAY
-                    self.logger.info(f"等待 {pause_time} 秒後進行下一輪...")
-                    time.sleep(pause_time)
+                    self.logger.info(f"等待 {round_delay} 秒後進行下一輪...")
+                    time.sleep(round_delay)
             
             # 處理結束
             total_result = f"完成 {success_count}/{max_rounds} 輪互動"
@@ -845,24 +955,8 @@ class CopilotHandler:
             self.logger.info(f"所有互動輪次完成，進入穩定期 {cooldown_time} 秒...")
             time.sleep(cooldown_time)
             
-            # 如果全部成功，創建一個兼容舊版的標記檔案
+            # 如果全部成功，記錄成功狀態
             if success_count == max_rounds:
-                try:
-                    # 建立兼容標記檔案
-                    project_name = Path(project_path).name
-                    script_root = Path(__file__).parent.parent  # 腳本根目錄
-                    project_result_dir = script_root / "ExecutionResult" / "Success" / project_name
-                    project_result_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # 創建舊格式標記檔案 (確保驗證通過)
-                    compat_file = project_result_dir / f"Copilot_AutoComplete_{time.strftime('%Y%m%d_%H%M%S')}.md"
-                    with open(compat_file, 'w', encoding='utf-8') as f:
-                        f.write(f"# 多輪互動成功標記檔案 ({max_rounds}輪)\n\n")
-                        f.write(f"本檔案為自動生成的兼容標記，表示專案 {project_name} 已成功完成 {max_rounds} 輪互動。\n")
-                        f.write(f"詳細互動結果請查看 *_第N輪.md 檔案。\n")
-                except Exception as e:
-                    self.logger.warning(f"創建兼容標記檔案失敗: {str(e)}")
-                
                 self.logger.info(f"✅ {project_name} 所有互動輪次成功完成")
                 return True
             else:

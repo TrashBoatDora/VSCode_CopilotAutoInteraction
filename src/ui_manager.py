@@ -99,9 +99,9 @@ class UIManager:
             root.destroy()
         
         def on_cancel():
-            if messagebox.askyesno("確認取消", "確定要取消執行嗎?"):
-                root.destroy()
-                sys.exit(0)
+            print("使用者關閉對話框，結束腳本執行")
+            root.destroy()
+            sys.exit(0)
         
         start_btn = ttk.Button(btn_frame, text="開始執行", command=on_start, width=15)
         start_btn.pack(side=tk.LEFT, padx=10, expand=True)

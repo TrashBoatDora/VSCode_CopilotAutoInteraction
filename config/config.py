@@ -69,6 +69,9 @@ class Config:
     INTERACTION_MAX_ROUNDS = 3      # 最大互動輪數
     INTERACTION_ENABLED = True      # 是否啟用反覆互動功能
     INTERACTION_ROUND_DELAY = 2     # 每輪互動間隔時間（秒）
+    INTERACTION_INCLUDE_PREVIOUS_RESPONSE = True  # 是否在新一輪提示詞中包含上一輪 Copilot 回應
+    INTERACTION_RESPONSE_CHAINING_PREFIX = "我們繼續基於前一次的討論。你的上一次回答是：\n\n"  # 回應串接前綴
+    INTERACTION_RESPONSE_CHAINING_SUFFIX = "\n\n現在，請針對以下問題或指示繼續：\n\n"  # 回應串接後綴
     
     # 日誌設定
     LOG_LEVEL = "INFO"      # 日誌等級：DEBUG, INFO, WARNING, ERROR

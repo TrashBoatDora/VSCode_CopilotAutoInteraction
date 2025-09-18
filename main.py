@@ -46,6 +46,7 @@ class HybridUIAutomationScript:
         
         # 執行選項
         self.use_smart_wait = True  # 預設使用智能等待
+        self.interaction_settings = None  # 儲存互動設定
         
         # 執行統計
         self.total_projects = 0
@@ -70,6 +71,9 @@ class HybridUIAutomationScript:
             
             # 顯示選項對話框
             reset_selected, self.use_smart_wait = self.ui_manager.show_options_dialog()
+            
+            # 每次執行都顯示互動設定選項
+            self._show_interaction_settings_dialog()
             
             # 如果選擇重置，執行重置腳本
             if reset_selected:
@@ -159,6 +163,28 @@ class HybridUIAutomationScript:
             # 清理環境
             self._cleanup()
     
+    def _show_interaction_settings_dialog(self):
+        """顯示互動設定對話框"""
+        try:
+            from src.interaction_settings_ui import show_interaction_settings
+            self.logger.info("顯示多輪互動設定介面")
+            settings = show_interaction_settings()
+            
+            if settings is None:
+                # 使用者取消了設定
+                self.logger.info("使用者取消了互動設定，結束腳本執行")
+                sys.exit(0)  # 直接退出腳本
+            else:
+                # 儲存設定並重新初始化 CopilotHandler
+                self.interaction_settings = settings
+                self.copilot_handler = CopilotHandler(self.error_handler, settings)
+                self.logger.info(f"本次執行的互動設定: {settings}")
+                
+        except Exception as e:
+            self.logger.error(f"顯示互動設定時發生錯誤: {e}")
+            # 發生錯誤時也退出腳本
+            sys.exit(1)
+
     def _pre_execution_checks(self) -> bool:
         """
         執行前檢查
@@ -337,11 +363,14 @@ class HybridUIAutomationScript:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
             # 步驟3: 處理 Copilot Chat（根據設定判斷是否使用反覆互動）
-            if config.INTERACTION_ENABLED:
+            # 使用互動設定或預設值
+            interaction_enabled = self.interaction_settings.get("interaction_enabled", config.INTERACTION_ENABLED) if self.interaction_settings else config.INTERACTION_ENABLED
+            max_rounds = self.interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS) if self.interaction_settings else config.INTERACTION_MAX_ROUNDS
+            
+            if interaction_enabled:
                 # 使用反覆互動功能
-                project_logger.log(f"處理 Copilot Chat (啟用反覆互動功能，最大輪數: {config.INTERACTION_MAX_ROUNDS})")
-                from src.copilot_handler import process_with_iterations
-                success = process_with_iterations(project.path, config.INTERACTION_MAX_ROUNDS)
+                project_logger.log(f"處理 Copilot Chat (啟用反覆互動功能，最大輪數: {max_rounds})")
+                success = self.copilot_handler.process_project_with_iterations(project.path, max_rounds)
                 
                 if not success:
                     raise AutomationError("Copilot 反覆互動處理失敗", ErrorType.COPILOT_ERROR)
