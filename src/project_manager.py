@@ -131,17 +131,14 @@ class ProjectManager:
                         supported_files.append(str(file_path.relative_to(project_path)))
                     file_count += len(files)
             
-            # 檢查是否已有 Copilot 處理結果（檢查統一的 ExecutionResult/Success 資料夾）
+            # 檢查是否已有多輪互動處理結果（檢查統一的 ExecutionResult/Success 資料夾）
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
             project_result_dir = execution_result_dir / project_name
             
-            # 支持多輪互動和舊版檔案格式
-            has_old_format = (project_result_dir.exists() and 
-                            any(project_result_dir.glob("Copilot_AutoComplete_*.md")))
-            has_new_format = (project_result_dir.exists() and 
-                            any(project_result_dir.glob("*_第*輪.md")))
-            has_copilot_file = has_new_format or has_old_format
+            # 只檢查多輪互動檔案格式
+            has_copilot_file = (project_result_dir.exists() and 
+                              any(project_result_dir.glob("*_第*輪.md")))
             
             # 如果沒有支援的檔案，跳過此專案
             if file_count == 0:
@@ -198,28 +195,16 @@ class ProjectManager:
         self.logger.info(f"已完成專案數量: {len(completed)}")
         return completed
     
-    def get_project_batches(self, batch_size: int = None) -> List[List[ProjectInfo]]:
+    def get_all_pending_projects(self) -> List[ProjectInfo]:
         """
-        將待處理專案分批
+        取得所有待處理的專案
         
-        Args:
-            batch_size: 每批大小
-            
         Returns:
-            List[List[ProjectInfo]]: 分批的專案列表
+            List[ProjectInfo]: 所有待處理的專案列表
         """
-        if batch_size is None:
-            batch_size = config.BATCH_SIZE
-        
         pending_projects = self.get_pending_projects()
-        batches = []
-        
-        for i in range(0, len(pending_projects), batch_size):
-            batch = pending_projects[i:i + batch_size]
-            batches.append(batch)
-        
-        self.logger.info(f"專案分為 {len(batches)} 批，每批最多 {batch_size} 個專案")
-        return batches
+        self.logger.info(f"找到 {len(pending_projects)} 個待處理專案")
+        return pending_projects
     
     def update_project_status(self, project_name: str, status: str, 
                              error_message: str = None, processing_time: float = None) -> bool:
@@ -275,19 +260,16 @@ class ProjectManager:
         Returns:
             bool: 標記是否成功
         """
-        # 重新檢查是否真的有 Copilot 檔案（檢查統一的 ExecutionResult/Success 資料夾）
+        # 重新檢查是否真的有多輪互動檔案（檢查統一的 ExecutionResult/Success 資料夾）
         project = self.get_project_by_name(project_name)
         if project:
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
             project_result_dir = execution_result_dir / project_name
             
-            # 支持多輪互動和舊版檔案格式
-            has_old_format = (project_result_dir.exists() and 
-                            any(project_result_dir.glob("Copilot_AutoComplete_*.md")))
-            has_new_format = (project_result_dir.exists() and 
-                            any(project_result_dir.glob("*_第*輪.md")))
-            has_success_file = has_new_format or has_old_format
+            # 只檢查多輪互動檔案格式
+            has_success_file = (project_result_dir.exists() and 
+                              any(project_result_dir.glob("*_第*輪.md")))
             
             if has_success_file:
                 project.has_copilot_file = True
@@ -478,6 +460,6 @@ def get_pending_projects() -> List[ProjectInfo]:
     """取得待處理專案的便捷函數"""
     return project_manager.get_pending_projects()
 
-def get_project_batches(batch_size: int = None) -> List[List[ProjectInfo]]:
-    """取得專案批次的便捷函數"""
-    return project_manager.get_project_batches(batch_size)
+def get_all_pending_projects() -> List[ProjectInfo]:
+    """取得所有待處理專案的便捷函數"""
+    return project_manager.get_all_pending_projects()

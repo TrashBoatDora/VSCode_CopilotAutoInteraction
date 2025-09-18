@@ -27,8 +27,8 @@ class Config:
     VSCODE_COMMAND_DELAY = 1    # 命令執行間隔時間（秒）
     
     # Copilot Chat 相關設定
-    COPILOT_RESPONSE_TIMEOUT = 90   # Copilot 回應超時時間（秒） - 增加到90秒
-    COPILOT_CHECK_INTERVAL = 5      # 檢查回應完成間隔（秒）
+    COPILOT_RESPONSE_TIMEOUT = 300   # Copilot 回應超時時間（秒） - 增加到300秒
+    COPILOT_CHECK_INTERVAL = 3      # 檢查回應完成間隔（秒）
     COPILOT_COPY_RETRY_MAX = 3      # 複製回應重試次數
     COPILOT_COPY_RETRY_DELAY = 2    # 複製重試間隔（秒）
     
@@ -36,7 +36,7 @@ class Config:
     SMART_WAIT_ENABLED = True    # 是否啟用智能等待
     SMART_WAIT_MAX_ATTEMPTS = 30  # 智能等待最大嘗試次數 - 增加到30次
     SMART_WAIT_INTERVAL = 2      # 智能等待檢查間隔（秒） - 減少到2秒提高響應性
-    SMART_WAIT_TIMEOUT = 90      # 智能等待最大時間（秒） - 與主超時時間保持一致
+    SMART_WAIT_TIMEOUT = 300      # 智能等待最大時間（秒） - 與主超時時間保持一致
     
     # Copilot 記憶清除命令序列
     COPILOT_CLEAR_MEMORY_COMMANDS = [
@@ -61,15 +61,15 @@ class Config:
     # COPY_BUTTON_IMAGE = ASSETS_DIR / "copy_button.png"
     # COPILOT_INPUT_BOX_IMAGE = ASSETS_DIR / "copilot_input.png"
     
-    # 批次處理設定
-    BATCH_SIZE = 100        # 每批處理專案數量
+    # 專案處理設定
     MAX_RETRY_ATTEMPTS = 3  # 失敗重試次數
     
-    # 反覆互動設定
+    # 反覆互動設定（將從 settings.json 讀取，以下為預設值）
     INTERACTION_MAX_ROUNDS = 3      # 最大互動輪數
     INTERACTION_ENABLED = True      # 是否啟用反覆互動功能
     INTERACTION_ROUND_DELAY = 2     # 每輪互動間隔時間（秒）
     INTERACTION_INCLUDE_PREVIOUS_RESPONSE = True  # 是否在新一輪提示詞中包含上一輪 Copilot 回應
+    INTERACTION_SHOW_UI_ON_STARTUP = True  # 是否在啟動時顯示設定介面
     INTERACTION_RESPONSE_CHAINING_PREFIX = "我們繼續基於前一次的討論。你的上一次回答是：\n\n"  # 回應串接前綴
     INTERACTION_RESPONSE_CHAINING_SUFFIX = "\n\n現在，請針對以下問題或指示繼續：\n\n"  # 回應串接後綴
     

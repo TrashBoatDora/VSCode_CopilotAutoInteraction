@@ -39,13 +39,15 @@ class InteractionSettingsUI:
         from src.settings_manager import settings_manager
         
         interaction_settings = settings_manager.get_interaction_settings()
+        automation_settings = settings_manager.load_settings().get("settings", {}).get("automation", {})
         
         # 轉換為 UI 期望的格式
         return {
             "interaction_enabled": interaction_settings.get("enabled", config.INTERACTION_ENABLED),
             "max_rounds": interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS),
             "include_previous_response": interaction_settings.get("include_previous_response", config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE),
-            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY)
+            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY),
+            "batch_size": automation_settings.get("batch_size", config.BATCH_SIZE)
         }
     
     def save_settings(self):
@@ -54,7 +56,7 @@ class InteractionSettingsUI:
             # 導入設定管理器
             from src.settings_manager import settings_manager
             
-            # 轉換為統一設定格式
+            # 更新互動設定
             interaction_settings = {
                 "enabled": self.settings["interaction_enabled"],
                 "max_rounds": self.settings["max_rounds"],
@@ -63,7 +65,17 @@ class InteractionSettingsUI:
                 "show_ui_on_startup": True
             }
             
-            return settings_manager.update_interaction_settings(interaction_settings)
+            # 更新自動化設定
+            full_settings = settings_manager.load_settings()
+            if "settings" not in full_settings:
+                full_settings["settings"] = {}
+            if "automation" not in full_settings["settings"]:
+                full_settings["settings"]["automation"] = {}
+            
+            full_settings["settings"]["automation"]["batch_size"] = self.settings["batch_size"]
+            full_settings["settings"]["interaction"] = interaction_settings
+            
+            return settings_manager.save_settings(full_settings)
         except Exception as e:
             print(f"儲存設定時發生錯誤: {e}")
             return False
@@ -122,6 +134,21 @@ class InteractionSettingsUI:
         )
         rounds_spinbox.pack(side="right")
         
+        # 批次大小設定
+        batch_frame = ttk.Frame(self.interaction_frame)
+        batch_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(batch_frame, text="每批處理專案數量:").pack(side="left")
+        self.batch_size_var = tk.IntVar(value=self.settings["batch_size"])
+        batch_spinbox = ttk.Spinbox(
+            batch_frame,
+            from_=1,
+            to=1000,
+            textvariable=self.batch_size_var,
+            width=8
+        )
+        batch_spinbox.pack(side="right")
+        
         # 回應串接設定框架
         chaining_frame = ttk.LabelFrame(main_frame, text="回應串接設定")
         chaining_frame.pack(fill="x", pady=10)
@@ -153,6 +180,7 @@ class InteractionSettingsUI:
 • 啟用時：每一輪會將上一輪的 Copilot 回應內容加入新的提示詞中，形成連續對話
 • 停用時：每一輪都只使用原始的 prompt.txt 內容，進行獨立分析
 • 建議在需要連續對話脈絡時啟用，單純重複分析時停用
+• 批次大小：控制每次執行腳本時同時處理的專案數量，建議設為適當值避免過載
 • 此設定僅適用於本次執行，下次執行時會再次詢問
 • 輪次間會自動使用預設間隔時間"""
         
@@ -227,6 +255,7 @@ class InteractionSettingsUI:
         self.interaction_enabled_var.set(True)
         self.max_rounds_var.set(3)
         self.include_previous_var.set(True)
+        self.batch_size_var.set(100)
         self.on_interaction_enabled_changed()
     
     def save_and_close(self):
@@ -236,6 +265,7 @@ class InteractionSettingsUI:
         self.settings["max_rounds"] = self.max_rounds_var.get()
         self.settings["include_previous_response"] = self.include_previous_var.get()
         self.settings["round_delay"] = config.INTERACTION_ROUND_DELAY  # 使用預設值
+        self.settings["batch_size"] = self.batch_size_var.get()
         
         # 直接關閉視窗，開始執行腳本
         self.root.destroy()

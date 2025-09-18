@@ -9,6 +9,7 @@ import threading
 sys.path.append(str(Path(__file__).parent.parent))
 
 from config.config import config
+from src.settings_manager import settings_manager
 
 class UIManager:
     """UI 管理器 - 提供簡單的選項選擇介面"""
@@ -28,7 +29,7 @@ class UIManager:
         """
         root = tk.Tk()
         root.title("自動化腳本設定")
-        root.geometry("480x450")  # 增加視窗尺寸，確保所有內容可見
+        root.geometry("480x450")  # 調整視窗尺寸
         root.resizable(False, False)  # 固定視窗大小，防止使用者調整大小
         
         # 設定視窗樣式

@@ -105,36 +105,19 @@ class HybridUIAutomationScript:
             
             self.logger.info(f"待處理專案: {len(pending_projects)} 個")
             
-            # 分批處理專案
-            batches = self.project_manager.get_project_batches()
-            self.logger.info(f"將分 {len(batches)} 批處理")
+            # 直接處理所有專案
+            all_projects = self.project_manager.get_all_pending_projects()
+            self.logger.info(f"開始處理 {len(all_projects)} 個專案")
             
-            # 執行各批次
-            for batch_num, batch in enumerate(batches, 1):
-                # 檢查是否收到中斷請求
-                if self.error_handler.emergency_stop_requested:
-                    self.logger.warning("收到中斷請求，停止處理")
-                    break
-                    
-                self.logger.create_separator(f"處理第 {batch_num}/{len(batches)} 批")
-                
-                if not self._process_batch(batch, batch_num):
-                    self.logger.warning(f"第 {batch_num} 批處理失敗，繼續下一批")
-                
-                # 檢查是否收到中斷請求（批次完成後）
-                if self.error_handler.emergency_stop_requested:
-                    self.logger.warning("收到中斷請求，停止處理")
-                    break
-                
-                # 批次間休息（可選）
-                if batch_num < len(batches):
-                    self.logger.info("批次間休息 30 秒...")
-                    # 在休息期間也檢查中斷請求
-                    for i in range(30):
-                        if self.error_handler.emergency_stop_requested:
-                            self.logger.warning("收到中斷請求，停止休息")
-                            break
-                        time.sleep(1)
+            # 執行所有專案
+            if not self._process_all_projects(all_projects):
+                self.logger.warning("專案處理過程中發生錯誤")
+            
+            # 檢查是否收到中斷請求
+            if self.error_handler.emergency_stop_requested:
+                self.logger.warning("收到中斷請求，停止處理")
+            
+            self.logger.info("所有專案處理完成")
             
             # 處理失敗的專案（重試）
             if not self.error_handler.emergency_stop_requested:
@@ -216,38 +199,37 @@ class HybridUIAutomationScript:
             self.logger.error(f"前置檢查失敗: {str(e)}")
             return False
     
-    def _process_batch(self, projects: List[ProjectInfo], batch_num: int) -> bool:
+    def _process_all_projects(self, projects: List[ProjectInfo]) -> bool:
         """
-        處理一批專案
+        處理所有專案
         
         Args:
             projects: 專案列表
-            batch_num: 批次編號
             
         Returns:
-            bool: 批次處理是否成功
+            bool: 處理是否成功
         """
         try:
-            batch_start_time = time.time()
-            batch_success = 0
-            batch_failed = 0
+            start_time = time.time()
+            total_success = 0
+            total_failed = 0
             
             for i, project in enumerate(projects, 1):
                 self.logger.info(f"處理專案 {i}/{len(projects)}: {project.name}")
                 
                 # 檢查是否需要緊急停止
                 if self.error_handler.emergency_stop_requested:
-                    self.logger.warning("收到緊急停止請求，中止批次處理")
+                    self.logger.warning("收到緊急停止請求，中止專案處理")
                     break
                 
                 # 處理單一專案
                 success = self._process_single_project(project)
                 
                 if success:
-                    batch_success += 1
+                    total_success += 1
                     self.successful_projects += 1
                 else:
-                    batch_failed += 1
+                    total_failed += 1
                     self.failed_projects += 1
                 
                 self.processed_projects += 1
@@ -255,14 +237,14 @@ class HybridUIAutomationScript:
                 # 項目間短暫休息
                 time.sleep(2)
             
-            # 批次摘要
-            batch_elapsed = time.time() - batch_start_time
-            self.logger.info(f"第 {batch_num} 批完成: 成功 {batch_success}, 失敗 {batch_failed}, 耗時 {batch_elapsed:.1f}秒")
+            # 處理摘要
+            elapsed = time.time() - start_time
+            self.logger.info(f"專案處理完成: 成功 {total_success}, 失敗 {total_failed}, 耗時 {elapsed:.1f}秒")
             
             return True
             
         except Exception as e:
-            self.logger.error(f"處理第 {batch_num} 批時發生錯誤: {str(e)}")
+            self.logger.error(f"處理專案時發生錯誤: {str(e)}")
             return False
     
     def _process_single_project(self, project: ProjectInfo) -> bool:
@@ -398,13 +380,12 @@ class HybridUIAutomationScript:
             project_name = Path(project.path).name
             project_result_dir = execution_result_dir / project_name
             
-            # 支持多輪互動和舊版檔案格式
-            has_old_format = any(project_result_dir.glob("Copilot_AutoComplete_*.md"))
-            has_new_format = any(project_result_dir.glob("*_第*輪.md"))
-            has_success_file = project_result_dir.exists() and (has_new_format or has_old_format)
+            # 檢查多輪互動結果檔案
+            has_success_file = (project_result_dir.exists() and 
+                              any(project_result_dir.glob("*_第*輪.md")))
             
             # 調試信息
-            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, 舊格式檔案: {has_old_format}, 新格式檔案: {has_new_format}")
+            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, 多輪互動檔案: {has_success_file}")
             
             if not has_success_file:
                 raise AutomationError("缺少成功執行結果檔案", ErrorType.PROJECT_ERROR)

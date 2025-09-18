@@ -1,0 +1,29 @@
+2025-09-18 02:20:31,068 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,069 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 02:20:31,076 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,077 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 02:20:31,091 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,103 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-18 02:20:31,112 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,124 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,126 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 02:20:31,138 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,139 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {3584, 9504, 3140, 9188, 7848, 7724, 4784, 8752, 8944, 10192, 1396, 2068, 9748, 6424, 8412}
+2025-09-18 02:20:31,148 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,149 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 02:20:31,162 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,163 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 02:20:31,170 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,171 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 02:20:31,182 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,184 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 02:20:31,196 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_022031.log
+2025-09-18 02:20:31,197 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-18 02:20:31,198 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-18 02:20:31,200 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-18 02:20:38,803 - MainController - INFO - 顯示多輪互動設定介面
+2025-09-18 02:21:14,712 - MainController - INFO - 清理執行環境...
+2025-09-18 02:21:14,713 - VSCodeController - INFO - 確保乾淨的執行環境...
+2025-09-18 02:21:14,714 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-18 02:21:19,718 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-18 02:21:19,720 - MainController - INFO - ✅ 環境清理完成

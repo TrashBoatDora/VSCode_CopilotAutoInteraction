@@ -39,13 +39,14 @@ class InteractionSettingsUI:
         from src.settings_manager import settings_manager
         
         interaction_settings = settings_manager.get_interaction_settings()
+        automation_settings = settings_manager.load_settings().get("settings", {}).get("automation", {})
         
         # 轉換為 UI 期望的格式
         return {
             "interaction_enabled": interaction_settings.get("enabled", config.INTERACTION_ENABLED),
             "max_rounds": interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS),
             "include_previous_response": interaction_settings.get("include_previous_response", config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE),
-            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY)
+            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY),
         }
     
     def save_settings(self):
@@ -54,7 +55,7 @@ class InteractionSettingsUI:
             # 導入設定管理器
             from src.settings_manager import settings_manager
             
-            # 轉換為統一設定格式
+            # 更新互動設定
             interaction_settings = {
                 "enabled": self.settings["interaction_enabled"],
                 "max_rounds": self.settings["max_rounds"],
@@ -63,7 +64,16 @@ class InteractionSettingsUI:
                 "show_ui_on_startup": True
             }
             
-            return settings_manager.update_interaction_settings(interaction_settings)
+            # 更新自動化設定
+            full_settings = settings_manager.load_settings()
+            if "settings" not in full_settings:
+                full_settings["settings"] = {}
+            if "automation" not in full_settings["settings"]:
+                full_settings["settings"]["automation"] = {}
+            
+            full_settings["settings"]["interaction"] = interaction_settings
+            
+            return settings_manager.save_settings(full_settings)
         except Exception as e:
             print(f"儲存設定時發生錯誤: {e}")
             return False
@@ -121,6 +131,18 @@ class InteractionSettingsUI:
             width=5
         )
         rounds_spinbox.pack(side="right")
+        
+        # 批次大小設定
+        batch_frame = ttk.Frame(self.interaction_frame)
+        batch_frame.pack(fill="x", padx=10, pady=5)
+        
+        batch_spinbox = ttk.Spinbox(
+            batch_frame,
+            from_=1,
+            to=1000,
+            width=8
+        )
+        batch_spinbox.pack(side="right")
         
         # 回應串接設定框架
         chaining_frame = ttk.LabelFrame(main_frame, text="回應串接設定")

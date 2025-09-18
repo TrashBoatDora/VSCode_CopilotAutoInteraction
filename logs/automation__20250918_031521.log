@@ -1,0 +1,14 @@
+2025-09-18 03:15:21,591 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,596 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-18 03:15:21,603 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,614 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {7296, 3140, 1384, 7148, 7724, 10188, 4784, 8944, 10192, 1396, 2068, 8340, 8700, 6424, 9428, 8412}
+2025-09-18 03:15:21,753 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,755 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 03:15:21,773 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,774 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 03:15:21,964 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,969 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 03:15:21,977 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,978 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 03:15:21,995 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_031521.log
+2025-09-18 03:15:21,997 - RecoveryManager - INFO - 恢復管理器初始化完成
