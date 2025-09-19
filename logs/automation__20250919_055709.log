@@ -1,0 +1,129 @@
+2025-09-19 05:57:09,441 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,442 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-19 05:57:09,447 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,452 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {2240, 8608, 3460, 7236, 10212, 5832, 10632, 11240, 2860, 10764, 2544, 7380, 7476, 9844}
+2025-09-19 05:57:09,559 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,560 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 05:57:09,569 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,570 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 05:57:09,570 - CopilotHandler - INFO - CWE 漏洞掃描功能未啟用
+2025-09-19 05:57:09,682 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,683 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-19 05:57:09,692 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,693 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-19 05:57:09,704 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,706 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-19 05:57:09,718 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,725 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,725 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-19 05:57:09,737 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,739 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {2240, 8608, 3460, 7236, 10212, 5832, 10632, 11240, 2860, 10764, 2544, 7380, 7476, 9844}
+2025-09-19 05:57:09,748 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,751 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-19 05:57:09,761 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,766 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 05:57:09,767 - CopilotHandler - INFO - CWE 漏洞掃描功能未啟用
+2025-09-19 05:57:09,774 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,775 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 05:57:09,787 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,790 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-19 05:57:09,803 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_055709.log
+2025-09-19 05:57:09,804 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-19 05:57:09,805 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-19 05:57:09,806 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-19 05:57:12,383 - MainController - INFO - 顯示多輪互動設定介面
+2025-09-19 05:57:24,940 - MainController - INFO - 正在初始化 CWE 漏洞掃描器...
+2025-09-19 05:57:25,048 - MainController - INFO - CWE 漏洞掃描器初始化完成
+2025-09-19 05:57:25,050 - MainController - INFO -   - 嚴重性閾值: High
+2025-09-19 05:57:25,051 - MainController - INFO -   - 生成報告: True
+2025-09-19 05:57:25,052 - MainController - INFO -   - 檢測到漏洞時終止: True
+2025-09-19 05:57:25,085 - MainController - INFO - 本次執行的互動設定: {'interaction_enabled': True, 'max_rounds': 3, 'include_previous_response': False, 'round_delay': 2, 'copilot_chat_modification_action': 'keep', 'cwe_scanner_enabled': True, 'cwe_severity_threshold': 'High', 'cwe_generate_report': True, 'cwe_terminate_on_vulnerability': True}
+2025-09-19 05:57:25,086 - MainController - INFO - 使用者選擇執行專案狀態重置
+2025-09-19 05:57:25,372 - MainController - INFO - 使用者選擇啟用智能等待功能
+2025-09-19 05:57:25,373 - MainController - INFO - 執行前置檢查...
+2025-09-19 05:57:25,388 - ImageRecognition - INFO - 圖像識別已設為可選，跳過圖像檔案檢查
+2025-09-19 05:57:25,391 - VSCodeController - INFO - 確保乾淨的執行環境...
+2025-09-19 05:57:25,393 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-19 05:57:30,398 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-19 05:57:30,400 - MainController - INFO - ✅ 前置檢查完成
+2025-09-19 05:57:30,401 - ProjectManager - INFO - 開始掃描專案目錄...
+2025-09-19 05:57:30,441 - ProjectManager - INFO - 掃描完成，發現 1 個專案
+2025-09-19 05:57:30,442 - MainController - INFO - 總共發現 1 個專案
+2025-09-19 05:57:30,443 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-19 05:57:30,444 - MainController - INFO - 待處理專案: 1 個
+2025-09-19 05:57:30,445 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-19 05:57:30,445 - ProjectManager - INFO - 找到 1 個待處理專案
+2025-09-19 05:57:30,446 - MainController - INFO - 開始處理 1 個專案
+2025-09-19 05:57:30,447 - MainController - INFO - 處理專案 1/1: sample_project
+2025-09-19 05:57:30,481 - RetryHandler - INFO - 嘗試執行 專案 sample_project (第 1/3 次)
+2025-09-19 05:57:30,496 - VSCodeController - INFO - 開啟專案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project
+2025-09-19 05:57:30,503 - VSCodeController - INFO - 發現現有 VS Code 實例，正在關閉...
+2025-09-19 05:57:30,504 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-19 05:57:35,510 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-19 05:57:35,527 - VSCodeController - INFO - 等待 VS Code 啟動...
+2025-09-19 05:57:40,530 - VSCodeController - INFO - ✅ VS Code 啟動成功 (第 1 次檢查)
+2025-09-19 05:57:42,534 - VSCodeController - INFO - 正在最大化視窗...
+2025-09-19 05:57:42,535 - VSCodeController - INFO - 正在最大化 VS Code 視窗...
+2025-09-19 05:57:43,745 - VSCodeController - INFO - ✅ 視窗最大化完成
+2025-09-19 05:57:43,748 - MainController - INFO - 修改結果處理設定: keep
+2025-09-19 05:57:43,748 - VSCodeController - INFO - 開始清除 Copilot Chat 記憶...
+2025-09-19 05:57:43,750 - VSCodeController - INFO - 修改結果處理模式: keep
+2025-09-19 05:57:45,967 - VSCodeController - INFO - 執行清除命令後，檢查是否出現保存對話提示...
+2025-09-19 05:57:46,095 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 05:57:46,697 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 05:57:47,324 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 05:57:47,937 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 05:57:50,046 - VSCodeController - INFO - ✅ Copilot Chat 記憶清除流程完成
+2025-09-19 05:57:59,517 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:57:59,662 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 05:58:07,821 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:58:08,010 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 05:58:16,057 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-19 05:58:16,168 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:58:32,553 - VSCodeController - INFO - 開始清除 Copilot Chat 記憶...
+2025-09-19 05:58:32,554 - VSCodeController - INFO - 修改結果處理模式: keep
+2025-09-19 05:58:34,791 - VSCodeController - INFO - 執行清除命令後，檢查是否出現保存對話提示...
+2025-09-19 05:58:34,931 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 05:58:35,648 - ImageRecognition - INFO - 🔍✅ 圖像識別: NewChat_Save.png - 找到 (信心度: 0.90)
+2025-09-19 05:58:35,649 - ImageRecognition - INFO - ✅ 檢測到保存新聊天對話框
+2025-09-19 05:58:35,650 - VSCodeController - INFO - 檢測到保存對話提示，執行 保留修改 操作
+2025-09-19 05:58:35,651 - ImageRecognition - INFO - 處理保存新聊天對話框，按下 Enter 保留並繼續...
+2025-09-19 05:58:36,755 - ImageRecognition - INFO - ✅ 已按下 Enter，保留並繼續聊天
+2025-09-19 05:58:36,756 - VSCodeController - INFO - ✅ 成功處理保存對話提示，已保留修改
+2025-09-19 05:58:38,373 - VSCodeController - INFO - ✅ Copilot Chat 記憶清除流程完成
+2025-09-19 05:58:48,789 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:58:48,902 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 05:58:56,894 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:58:57,013 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 05:59:05,000 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-19 05:59:05,111 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-19 05:59:24,650 - MainController - INFO - 結果檔案驗證 - 目錄存在: True, 多輪互動檔案: True
+2025-09-19 05:59:24,656 - MainController - INFO - 多輪互動模式，進行額外的穩定期等待...
+2025-09-19 05:59:32,658 - MainController - INFO - 使用智能等待模式，進行最後確認...
+2025-09-19 05:59:32,663 - MainController - INFO - 最後確認 Copilot 回應...
+2025-09-19 05:59:39,036 - MainController - INFO - ✅ 確認收到完整回應 (577 字元)
+2025-09-19 05:59:39,037 - MainController - INFO - 等待 3 秒確保所有操作完成...
+2025-09-19 05:59:42,039 - VSCodeController - INFO - 關閉專案: sample_project
+2025-09-19 05:59:44,168 - VSCodeController - INFO - ✅ 優雅關閉成功 - 方法: Ctrl+Shift+W (關閉視窗)
+2025-09-19 05:59:44,184 - RetryHandler - INFO - ✅ 專案 sample_project 執行成功
+2025-09-19 05:59:46,250 - MainController - INFO - 專案處理完成: 成功 1, 失敗 0, 耗時 135.8秒
+2025-09-19 05:59:46,252 - MainController - INFO - 所有專案處理完成
+2025-09-19 05:59:46,253 - ProjectManager - INFO - 需要重試的專案數量: 0
+2025-09-19 05:59:46,254 - MainController - INFO - 沒有需要重試的專案
+2025-09-19 05:59:46,255 - MainController - INFO - ========================= 執行完成摘要 ===========================
+2025-09-19 05:59:46,256 - MainController - INFO - 📊 批次處理完成:
+2025-09-19 05:59:46,257 - MainController - INFO -    總專案數: 1
+2025-09-19 05:59:46,259 - MainController - INFO -    成功: 1
+2025-09-19 05:59:46,261 - MainController - INFO -    失敗: 0
+2025-09-19 05:59:46,264 - MainController - INFO -    成功率: 100.0%
+2025-09-19 05:59:46,266 - MainController - INFO -    總耗時: 156.45秒
+2025-09-19 05:59:46,268 - ProjectManager - INFO - 已完成專案數量: 1
+2025-09-19 05:59:46,270 - ProjectManager - INFO - 失敗專案數量: 0
+2025-09-19 05:59:46,271 - ProjectManager - INFO - 待處理專案數量: 0
+2025-09-19 05:59:46,283 - ProjectManager - INFO - 摘要報告已儲存: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\AutomationReport\automation_report_20250919_055946.json
+2025-09-19 05:59:46,284 - MainController - INFO - 詳細報告已儲存: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\AutomationReport\automation_report_20250919_055946.json
+2025-09-19 05:59:46,285 - MainController - INFO - 清理執行環境...
+2025-09-19 05:59:46,286 - VSCodeController - INFO - 確保乾淨的執行環境...
+2025-09-19 05:59:46,288 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-19 05:59:51,293 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-19 05:59:51,295 - MainController - INFO - ✅ 環境清理完成

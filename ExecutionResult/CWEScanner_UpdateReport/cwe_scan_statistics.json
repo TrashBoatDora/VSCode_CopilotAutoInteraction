@@ -1,0 +1,27 @@
+{
+  "total_scans": 2,
+  "projects_with_vulnerabilities": 2,
+  "projects_with_high_risk": 1,
+  "scan_history": [
+    {
+      "timestamp": "2025-09-19T05:58:30.487970",
+      "project_name": "sample_project",
+      "project_path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project",
+      "round_number": 1,
+      "result_type": "Safe",
+      "result_directory": "ExecutionResult\\CWE_Results\\Safe\\sample_project",
+      "total_vulnerabilities": 8,
+      "high_risk_count": 0
+    },
+    {
+      "timestamp": "2025-09-19T05:59:19.585054",
+      "project_name": "sample_project",
+      "project_path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project",
+      "round_number": 2,
+      "result_type": "Vulnerable",
+      "result_directory": "ExecutionResult\\CWE_Results\\Vulnerable\\sample_project",
+      "total_vulnerabilities": 39,
+      "high_risk_count": 1
+    }
+  ]
+}

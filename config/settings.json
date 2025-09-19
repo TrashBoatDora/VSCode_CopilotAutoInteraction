@@ -28,6 +28,13 @@
             "round_delay": 2,
             "show_ui_on_startup": true
         },
+        "cwe_scanner": {
+            "enabled": false,
+            "severity_threshold": "High",
+            "enabled_scanners": null,
+            "generate_report": true,
+            "terminate_on_vulnerability": true
+        },
         "image_recognition": {
             "confidence_threshold": 0.9,
             "screenshot_delay_seconds": 0.5,

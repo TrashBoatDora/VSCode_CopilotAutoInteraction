@@ -1,0 +1,124 @@
+2025-09-19 04:58:16,430 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_045816.log
+2025-09-19 04:58:16,435 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 04:58:16,437 - CopilotHandler - INFO - CWE 漏洞掃描功能已啟用
+2025-09-19 04:58:41,499 - CopilotHandler - INFO - 使用外部提供的互動設定: {'interaction_enabled': True, 'max_rounds': 2, 'include_previous_response': False, 'round_delay': 2, 'copilot_chat_modification_action': 'keep', 'cwe_scanner_enabled': True, 'cwe_severity_threshold': 'High', 'cwe_generate_report': True, 'cwe_terminate_on_vulnerability': True}
+2025-09-19 04:58:41,500 - CopilotHandler - INFO - ========================= 開始處理專案 sample_project，計劃互動 2 輪 ===
+2025-09-19 04:58:41,502 - CopilotHandler - INFO - 回應串接功能: 停用
+2025-09-19 04:58:41,509 - CopilotHandler - INFO - ========================= 開始第 1 輪互動 ========================
+2025-09-19 04:58:41,515 - CopilotHandler - INFO - 第 1 輪：使用第一輪提示詞 (prompt1.txt)
+2025-09-19 04:58:41,517 - CopilotHandler - INFO - ========================= 處理專案: sample_project (第 1 輪) =====
+2025-09-19 04:58:41,518 - CopilotHandler - INFO - 開啟 Copilot Chat...
+2025-09-19 04:58:44,637 - CopilotHandler - INFO - ✅ Copilot 開啟 Chat 面板
+2025-09-19 04:58:44,639 - CopilotHandler - INFO - 發送提示詞到 Copilot Chat...
+2025-09-19 04:58:48,797 - CopilotHandler - INFO - ✅ Copilot 發送提示詞 - 長度: 40 字元
+2025-09-19 04:58:48,798 - CopilotHandler - INFO - 等待 Copilot 回應 (超時: 300秒, 智能等待: 開啟)...
+2025-09-19 04:58:48,798 - CopilotHandler - INFO - 智能等待 Copilot 回應，最長等待 300 秒...
+2025-09-19 04:58:48,799 - CopilotHandler - INFO - 初始等待 2 秒...
+2025-09-19 04:58:59,623 - CopilotHandler - INFO - ✅ 圖像檢測確認：Copilot 回應已完成（檢測到 send 按鈕）
+2025-09-19 04:59:06,140 - CopilotHandler - INFO - 🎉 完成等待！(圖像檢測, 17.3秒, 209字元)
+2025-09-19 04:59:06,141 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 04:59:12,541 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 209 字元
+2025-09-19 04:59:12,543 - CopilotHandler - INFO - 🔍 開始執行 CWE 安全漏洞掃描...
+2025-09-19 04:59:12,574 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: (
+2025-09-19 04:59:12,578 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 04:59:12,580 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: )
+2025-09-19 04:59:12,581 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 04:59:12,595 - CopilotHandler - INFO - 📄 專案 CWE 掃描報告已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_scan_result_20250919_045912.json
+2025-09-19 04:59:12,602 - CopilotHandler - INFO - 📄 專案 CWE 摘要已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_summary_20250919_045912.txt
+2025-09-19 04:59:12,613 - CopilotHandler - INFO - 📊 全域掃描統計已更新: ExecutionResult\CWEScanner_UpdateReport\cwe_scan_statistics.json
+2025-09-19 04:59:12,616 - CopilotHandler - INFO - ℹ️ 發現低風險漏洞，繼續執行
+2025-09-19 04:59:12,629 - CopilotHandler - INFO - 儲存回應到: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\Success\sample_project\20250919_0459_第1輪.md
+2025-09-19 04:59:12,639 - CopilotHandler - INFO - ✅ Copilot 儲存回應 - 檔案: 20250919_0459_第1輪.md
+2025-09-19 04:59:14,143 - CopilotHandler - INFO - ✅ Copilot 第 1 輪處理完成 - sample_project
+2025-09-19 04:59:14,145 - CopilotHandler - INFO - ✅ 第 1 輪互動成功
+2025-09-19 04:59:14,145 - CopilotHandler - INFO - 等待 2 秒後進行下一輪...
+2025-09-19 04:59:16,147 - CopilotHandler - INFO - ========================= 開始第 2 輪互動 ========================
+2025-09-19 04:59:16,158 - CopilotHandler - INFO - 第 2 輪：使用第二輪提示詞 (prompt2.txt)
+2025-09-19 04:59:16,160 - CopilotHandler - INFO - 第 2 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞
+2025-09-19 04:59:23,063 - CopilotHandler - INFO - ========================= 處理專案: sample_project (第 2 輪) =====
+2025-09-19 04:59:23,065 - CopilotHandler - INFO - 開啟 Copilot Chat...
+2025-09-19 04:59:26,175 - CopilotHandler - INFO - ✅ Copilot 開啟 Chat 面板
+2025-09-19 04:59:26,177 - CopilotHandler - INFO - 發送提示詞到 Copilot Chat...
+2025-09-19 04:59:30,324 - CopilotHandler - INFO - ✅ Copilot 發送提示詞 - 長度: 29 字元
+2025-09-19 04:59:30,325 - CopilotHandler - INFO - 等待 Copilot 回應 (超時: 300秒, 智能等待: 開啟)...
+2025-09-19 04:59:30,326 - CopilotHandler - INFO - 智能等待 Copilot 回應，最長等待 300 秒...
+2025-09-19 04:59:30,327 - CopilotHandler - INFO - 初始等待 2 秒...
+2025-09-19 04:59:38,962 - CopilotHandler - INFO - ✅ 檢測到 Copilot 開始回應
+2025-09-19 04:59:48,850 - CopilotHandler - INFO - ✅ 圖像檢測確認：Copilot 回應已完成（檢測到 send 按鈕）
+2025-09-19 04:59:55,238 - CopilotHandler - INFO - 🎉 完成等待！(圖像檢測, 24.9秒, 256字元)
+2025-09-19 04:59:55,239 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 05:00:01,577 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 256 字元
+2025-09-19 05:00:01,578 - CopilotHandler - INFO - 🔍 開始執行 CWE 安全漏洞掃描...
+2025-09-19 05:00:01,581 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,582 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,583 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,584 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,586 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: (
+2025-09-19 05:00:01,588 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,589 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,590 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,593 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,595 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,596 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: )
+2025-09-19 05:00:01,598 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,599 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: (
+2025-09-19 05:00:01,602 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,604 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: )
+2025-09-19 05:00:01,607 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,610 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,611 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,612 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,614 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,616 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,617 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,619 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,621 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,622 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,623 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,623 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:01,625 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:01,638 - CopilotHandler - INFO - 📄 專案 CWE 掃描報告已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_scan_result_20250919_050001.json
+2025-09-19 05:00:01,644 - CopilotHandler - INFO - 📄 專案 CWE 摘要已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_summary_20250919_050001.txt
+2025-09-19 05:00:01,661 - CopilotHandler - INFO - 📊 全域掃描統計已更新: ExecutionResult\CWEScanner_UpdateReport\cwe_scan_statistics.json
+2025-09-19 05:00:01,662 - CopilotHandler - INFO - ℹ️ 發現低風險漏洞，繼續執行
+2025-09-19 05:00:01,672 - CopilotHandler - INFO - 儲存回應到: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\Success\sample_project\20250919_0500_第2輪.md
+2025-09-19 05:00:01,680 - CopilotHandler - INFO - ✅ Copilot 儲存回應 - 檔案: 20250919_0500_第2輪.md
+2025-09-19 05:00:03,183 - CopilotHandler - INFO - ✅ Copilot 第 2 輪處理完成 - sample_project
+2025-09-19 05:00:03,187 - CopilotHandler - INFO - ✅ 第 2 輪互動成功
+2025-09-19 05:00:03,188 - CopilotHandler - INFO - 所有互動輪次完成，進入穩定期 5 秒...
+2025-09-19 05:00:08,190 - CopilotHandler - INFO - ✅ sample_project 所有互動輪次成功完成
+2025-09-19 05:00:16,216 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 05:00:22,572 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 256 字元
+2025-09-19 05:00:22,573 - CopilotHandler - INFO - 🔍 開始執行 CWE 安全漏洞掃描...
+2025-09-19 05:00:22,576 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,576 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,577 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,578 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,580 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: (
+2025-09-19 05:00:22,581 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,582 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,583 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,583 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,584 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,586 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: )
+2025-09-19 05:00:22,587 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,587 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: (
+2025-09-19 05:00:22,590 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,592 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: )
+2025-09-19 05:00:22,595 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,597 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,598 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,600 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,602 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,603 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,604 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,606 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,610 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,611 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,612 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,613 - CopilotHandler - WARNING - 🚨 發現 CWE-078 漏洞: 檢測到可能的命令注入字符: `
+2025-09-19 05:00:22,613 - CopilotHandler - WARNING -    嚴重性: Medium, 信心度: 0.60
+2025-09-19 05:00:22,637 - CopilotHandler - INFO - 📄 專案 CWE 掃描報告已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_scan_result_20250919_050022.json
+2025-09-19 05:00:22,647 - CopilotHandler - INFO - 📄 專案 CWE 摘要已生成: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project\CWE_Report\cwe_summary_20250919_050022.txt
+2025-09-19 05:00:22,665 - CopilotHandler - INFO - 📊 全域掃描統計已更新: ExecutionResult\CWEScanner_UpdateReport\cwe_scan_statistics.json
+2025-09-19 05:00:22,666 - CopilotHandler - INFO - ℹ️ 發現低風險漏洞，繼續執行

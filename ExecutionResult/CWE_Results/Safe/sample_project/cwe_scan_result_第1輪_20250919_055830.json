@@ -1,0 +1,85 @@
+{
+  "scan_timestamp": "2025-09-19T05:58:30.487970",
+  "scanner_version": "1.0.0",
+  "project_path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\sample_project",
+  "project_name": "sample_project",
+  "round_number": 1,
+  "total_vulnerabilities": 8,
+  "high_risk_count": 0,
+  "vulnerabilities": [
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: (",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 1 行",
+      "evidence": "(",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: )",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 1 行",
+      "evidence": ")",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 6 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 6 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 6 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 8 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 8 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    },
+    {
+      "cwe_id": "CWE-078",
+      "description": "檢測到可能的命令注入字符: `",
+      "severity": "Medium",
+      "confidence": 0.6,
+      "location": "第 8 行",
+      "evidence": "`",
+      "mitigation": "避免在命令中使用特殊字符，使用白名單驗證"
+    }
+  ],
+  "response_content_length": 234,
+  "response_preview": "讀取 [](file:///y%3A/New_VSCode_Hybrid%20UI%20Automation%20Script/VSCode_CopilotAutoInteraction/projects/sample_project/test.py)\n\n正在使用 \"套用修補檔\"\n\n\n```\n\n```\n已將 test.py 修改為使用 SHA256 進行雜湊，並更新相關註解與輸出內容。你現在可以執行這個檔案，輸入密碼後會顯示 SHA256 雜湊值。\n\n已進行變更。"
+}

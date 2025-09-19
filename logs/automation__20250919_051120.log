@@ -1,0 +1,16 @@
+2025-09-19 05:11:20,641 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_051120.log
+2025-09-19 05:11:20,674 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_051120.log
+2025-09-19 05:11:20,679 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 05:11:20,689 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_051120.log
+2025-09-19 05:11:20,690 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 05:11:20,691 - CopilotHandler - INFO - CWE 漏洞掃描功能未啟用
+2025-09-19 05:11:20,831 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_051120.log
+2025-09-19 05:11:20,832 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 05:11:20,832 - CopilotHandler - INFO - CWE 漏洞掃描功能已啟用
+2025-09-19 05:11:20,841 - CopilotHandler - INFO - 📄 CWE 掃描報告已生成: ExecutionResult\Success\test_sample1\cwe_scan_result_20250919_051120.json
+2025-09-19 05:11:20,856 - CopilotHandler - INFO - 📄 CWE 清潔掃描報告已生成: ExecutionResult\Success\test_sample1\cwe_scan_clean_20250919_051120.txt
+2025-09-19 05:11:20,882 - CopilotHandler - INFO - 📊 全域掃描統計已更新: ExecutionResult\CWEScanner_UpdateReport\cwe_scan_statistics.json
+2025-09-19 05:11:20,900 - CopilotHandler - INFO - 📄 CWE 掃描報告已生成: ExecutionResult\Fail\test_sample1\cwe_scan_result_20250919_051120.json
+2025-09-19 05:11:20,907 - CopilotHandler - INFO - 📄 CWE 摘要已生成: ExecutionResult\Fail\test_sample1\cwe_summary_20250919_051120.txt
+2025-09-19 05:11:20,937 - CopilotHandler - WARNING - 🚨 全域高風險漏洞警報已生成: ExecutionResult\CWEScanner_UpdateReport\cwe_high_risk_alert_20250919_051120.txt
+2025-09-19 05:11:20,947 - CopilotHandler - INFO - 📊 全域掃描統計已更新: ExecutionResult\CWEScanner_UpdateReport\cwe_scan_statistics.json

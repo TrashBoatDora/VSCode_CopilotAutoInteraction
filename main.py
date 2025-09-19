@@ -47,6 +47,7 @@ class HybridUIAutomationScript:
         # 執行選項
         self.use_smart_wait = True  # 預設使用智能等待
         self.interaction_settings = None  # 儲存互動設定
+        self.cwe_scanner = None  # CWE 掃描器實例
         
         # 執行統計
         self.total_projects = 0
@@ -160,13 +161,55 @@ class HybridUIAutomationScript:
             else:
                 # 儲存設定並重新初始化 CopilotHandler
                 self.interaction_settings = settings
-                self.copilot_handler = CopilotHandler(self.error_handler, settings)
+                
+                # 初始化 CWE 掃描器（如果啟用）
+                self._initialize_cwe_scanner(settings)
+                
+                # 重新初始化 CopilotHandler 並傳入 CWE 掃描器
+                self.copilot_handler = CopilotHandler(self.error_handler, settings, self.cwe_scanner)
+                
                 self.logger.info(f"本次執行的互動設定: {settings}")
                 
         except Exception as e:
             self.logger.error(f"顯示互動設定時發生錯誤: {e}")
             # 發生錯誤時也退出腳本
             sys.exit(1)
+
+    def _initialize_cwe_scanner(self, settings: Dict):
+        """
+        初始化 CWE 掃描器
+        
+        Args:
+            settings: 從 UI 獲得的設定
+        """
+        try:
+            if settings.get("cwe_scanner_enabled", False):
+                self.logger.info("正在初始化 CWE 漏洞掃描器...")
+                
+                # 動態導入 CWE 掃描器模組
+                import sys
+                import os
+                cwe_scanner_path = os.path.join(os.path.dirname(__file__), "src", "CWE_Scanner")
+                if cwe_scanner_path not in sys.path:
+                    sys.path.insert(0, cwe_scanner_path)
+                
+                from CWE_main import CWEMainScanner
+                
+                # 初始化掃描器
+                self.cwe_scanner = CWEMainScanner()
+                
+                self.logger.info("CWE 漏洞掃描器初始化完成")
+                self.logger.info(f"  - 嚴重性閾值: {settings.get('cwe_severity_threshold', 'High')}")
+                self.logger.info(f"  - 生成報告: {settings.get('cwe_generate_report', True)}")
+                self.logger.info(f"  - 檢測到漏洞時終止: {settings.get('cwe_terminate_on_vulnerability', True)}")
+            else:
+                self.logger.info("CWE 漏洞掃描器未啟用")
+                self.cwe_scanner = None
+                
+        except Exception as e:
+            self.logger.error(f"初始化 CWE 掃描器時發生錯誤: {e}")
+            self.logger.warning("將繼續執行但不會進行 CWE 漏洞檢查")
+            self.cwe_scanner = None
 
     def _pre_execution_checks(self) -> bool:
         """

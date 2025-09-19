@@ -20,8 +20,8 @@ class InteractionSettingsUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Copilot Chat 多輪互動設定")
-        self.root.geometry("650x650")  # 增大視窗尺寸以容納新功能
-        self.root.resizable(False, False)
+        self.root.geometry("500x800")  # 進一步增大視窗高度
+        self.root.resizable(True, True)  # 允許調整大小
         
         # 設定關閉事件處理
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -46,7 +46,12 @@ class InteractionSettingsUI:
             "max_rounds": interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS),
             "include_previous_response": interaction_settings.get("include_previous_response", config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE),
             "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY),
-            "copilot_chat_modification_action": interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION)
+            "copilot_chat_modification_action": interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION),
+            # CWE 設定
+            "cwe_scanner_enabled": interaction_settings.get("cwe_scanner_enabled", config.CWE_SCANNER_ENABLED),
+            "cwe_severity_threshold": interaction_settings.get("cwe_severity_threshold", config.CWE_SCANNER_SEVERITY_THRESHOLD),
+            "cwe_generate_report": interaction_settings.get("cwe_generate_report", config.CWE_REPORT_ENABLED),
+            "cwe_terminate_on_vulnerability": interaction_settings.get("cwe_terminate_on_vulnerability", config.CWE_TERMINATE_ON_VULNERABILITY)
         }
     
     def save_settings(self):
@@ -65,16 +70,41 @@ class InteractionSettingsUI:
                 "copilot_chat_modification_action": self.settings["copilot_chat_modification_action"]
             }
             
-            return settings_manager.update_interaction_settings(interaction_settings)
+            # CWE 設定
+            cwe_settings = {
+                "enabled": self.settings["cwe_scanner_enabled"],
+                "severity_threshold": self.settings["cwe_severity_threshold"],
+                "generate_report": self.settings["cwe_generate_report"],
+                "terminate_on_vulnerability": self.settings["cwe_terminate_on_vulnerability"]
+            }
+            
+            return settings_manager.update_interaction_settings(interaction_settings, cwe_settings)
         except Exception as e:
             print(f"儲存設定時發生錯誤: {e}")
             return False
     
     def create_widgets(self):
         """建立 UI 元件"""
+        # 創建主容器框架
+        container = ttk.Frame(self.root)
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # 創建可滾動的內容框架
+        canvas = tk.Canvas(container)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
         # 主標題
         title_label = tk.Label(
-            self.root, 
+            scrollable_frame, 
             text="選擇多輪互動模式", 
             font=("Arial", 16, "bold")
         )
@@ -82,7 +112,7 @@ class InteractionSettingsUI:
         
         # 副標題
         subtitle_label = tk.Label(
-            self.root, 
+            scrollable_frame, 
             text="請選擇本次執行的互動設定", 
             font=("Arial", 10),
             fg="gray"
@@ -90,7 +120,7 @@ class InteractionSettingsUI:
         subtitle_label.pack(pady=(0, 15))
         
         # 主要設定框架
-        main_frame = ttk.Frame(self.root)
+        main_frame = ttk.Frame(scrollable_frame)
         main_frame.pack(padx=20, pady=10, fill="both", expand=True)
         
         # 啟用多輪互動
@@ -214,9 +244,90 @@ class InteractionSettingsUI:
         modification_explanation_text.insert("1.0", modification_explanation_content)
         modification_explanation_text.config(state="disabled")
         
-        # 按鈕框架
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill="x", pady=30)  # 增加 padding
+        # CWE 漏洞檢查設定框架
+        cwe_frame = ttk.LabelFrame(main_frame, text="CWE 漏洞檢查設定 (實驗性功能)")
+        cwe_frame.pack(fill="x", pady=10)
+        
+        # 啟用 CWE 檢查
+        self.cwe_enabled_var = tk.BooleanVar(value=self.settings["cwe_scanner_enabled"])
+        cwe_checkbox = ttk.Checkbutton(
+            cwe_frame,
+            text="啟用 CWE 漏洞檢查",
+            variable=self.cwe_enabled_var,
+            command=self.on_cwe_enabled_changed
+        )
+        cwe_checkbox.pack(anchor="w", padx=10, pady=5)
+        
+        # CWE 詳細設定框架
+        self.cwe_details_frame = ttk.Frame(cwe_frame)
+        self.cwe_details_frame.pack(fill="x", padx=20, pady=5)
+        
+        # 嚴重性閾值設定
+        severity_frame = ttk.Frame(self.cwe_details_frame)
+        severity_frame.pack(fill="x", pady=2)
+        
+        ttk.Label(severity_frame, text="觸發終止的最低嚴重性等級:").pack(side="left")
+        self.cwe_severity_var = tk.StringVar(value=self.settings["cwe_severity_threshold"])
+        severity_combo = ttk.Combobox(
+            severity_frame,
+            textvariable=self.cwe_severity_var,
+            values=["Low", "Medium", "High", "Critical"],
+            state="readonly",
+            width=10
+        )
+        severity_combo.pack(side="right")
+        
+        # 生成報告選項
+        self.cwe_report_var = tk.BooleanVar(value=self.settings["cwe_generate_report"])
+        report_checkbox = ttk.Checkbutton(
+            self.cwe_details_frame,
+            text="生成 CWE 分析報告",
+            variable=self.cwe_report_var
+        )
+        report_checkbox.pack(anchor="w", pady=2)
+        
+        # 檢測到漏洞時終止選項
+        self.cwe_terminate_var = tk.BooleanVar(value=self.settings["cwe_terminate_on_vulnerability"])
+        terminate_checkbox = ttk.Checkbutton(
+            self.cwe_details_frame,
+            text="檢測到漏洞時立即終止專案",
+            variable=self.cwe_terminate_var
+        )
+        terminate_checkbox.pack(anchor="w", pady=2)
+        
+        # CWE 說明文字
+        cwe_explanation_text = tk.Text(
+            cwe_frame,
+            height=4,
+            width=60,
+            wrap="word",
+            state="disabled",
+            bg=self.root.cget("bg"),
+            font=("Arial", 9)
+        )
+        cwe_explanation_text.pack(padx=10, pady=5, fill="x")
+        
+        cwe_explanation_content = """說明：
+• 啟用後會對 Copilot Chat 的回應內容進行安全漏洞掃描
+• 檢測包括注入攻擊、弱加密、路徑遍歷等 20+ 種 CWE 漏洞類型
+• 當檢測到達到指定嚴重性的漏洞時，會記錄到日誌並可選擇終止專案
+• 分析報告會保存到專案結果目錄中供後續分析"""
+        
+        cwe_explanation_text.config(state="normal")
+        cwe_explanation_text.insert("1.0", cwe_explanation_content)
+        cwe_explanation_text.config(state="disabled")
+        
+        # 配置滾動條和畫布
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 分隔線
+        separator = ttk.Separator(self.root, orient='horizontal')
+        separator.pack(side="bottom", fill="x", padx=10, pady=5)
+        
+        # 按鈕框架（固定在視窗底部）
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(side="bottom", fill="x", padx=20, pady=15)
         
         # 重設按鈕
         reset_button = ttk.Button(
@@ -245,8 +356,14 @@ class InteractionSettingsUI:
         )
         save_button.pack(side="right", padx=5)
         
+        # 綁定滑鼠滾輪事件到畫布
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
         # 初始狀態設定
         self.on_interaction_enabled_changed()
+        self.on_cwe_enabled_changed()
     
     def on_close(self):
         """處理視窗關閉事件"""
@@ -262,6 +379,14 @@ class InteractionSettingsUI:
         
         # 啟用或停用相關元件
         for child in self.interaction_frame.winfo_children():
+            self.set_widget_state(child, "normal" if enabled else "disabled")
+    
+    def on_cwe_enabled_changed(self):
+        """當啟用 CWE 檢查選項改變時"""
+        enabled = self.cwe_enabled_var.get()
+        
+        # 啟用或停用相關元件
+        for child in self.cwe_details_frame.winfo_children():
             self.set_widget_state(child, "normal" if enabled else "disabled")
     
     def set_widget_state(self, widget, state):
@@ -282,7 +407,13 @@ class InteractionSettingsUI:
         self.max_rounds_var.set(3)
         self.include_previous_var.set(True)
         self.modification_action_var.set("keep")
+        # CWE 設定重設
+        self.cwe_enabled_var.set(False)
+        self.cwe_severity_var.set("High")
+        self.cwe_report_var.set(True)
+        self.cwe_terminate_var.set(True)
         self.on_interaction_enabled_changed()
+        self.on_cwe_enabled_changed()
     
     def save_and_close(self):
         """更新設定並關閉視窗（不保存到檔案）"""
@@ -292,6 +423,12 @@ class InteractionSettingsUI:
         self.settings["include_previous_response"] = self.include_previous_var.get()
         self.settings["round_delay"] = config.INTERACTION_ROUND_DELAY  # 使用預設值
         self.settings["copilot_chat_modification_action"] = self.modification_action_var.get()
+        
+        # CWE 設定
+        self.settings["cwe_scanner_enabled"] = self.cwe_enabled_var.get()
+        self.settings["cwe_severity_threshold"] = self.cwe_severity_var.get()
+        self.settings["cwe_generate_report"] = self.cwe_report_var.get()
+        self.settings["cwe_terminate_on_vulnerability"] = self.cwe_terminate_var.get()
         
         # 直接關閉視窗，開始執行腳本
         self.root.destroy()

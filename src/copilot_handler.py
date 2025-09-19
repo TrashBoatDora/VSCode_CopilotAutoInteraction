@@ -9,6 +9,7 @@ import pyautogui
 import pyperclip
 import psutil
 import time
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 import sys
@@ -22,7 +23,7 @@ from src.image_recognition import image_recognition
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
     
-    def __init__(self, error_handler=None, interaction_settings=None):
+    def __init__(self, error_handler=None, interaction_settings=None, cwe_scanner=None):
         """初始化 Copilot 處理器"""
         self.logger = get_logger("CopilotHandler")
         self.is_chat_open = False
@@ -30,7 +31,15 @@ class CopilotHandler:
         self.error_handler = error_handler  # 添加 error_handler 引用
         self.image_recognition = image_recognition  # 添加圖像識別引用
         self.interaction_settings = interaction_settings  # 添加外部設定支援
+        self.cwe_scanner = cwe_scanner  # 添加 CWE 掃描器引用
+        self.current_project_path = None  # 添加當前專案路徑追蹤
+        self._cwe_termination_requested = False  # CWE 終止標記
         self.logger.info("Copilot Chat 處理器初始化完成")
+        
+        if self.cwe_scanner:
+            self.logger.info("CWE 漏洞掃描功能已啟用")
+        else:
+            self.logger.info("CWE 漏洞掃描功能未啟用")
     
     def open_copilot_chat(self) -> bool:
         """
@@ -614,6 +623,8 @@ class CopilotHandler:
             Tuple[bool, Optional[str]]: (是否成功, 錯誤訊息)
         """
         try:
+            # 設置當前專案路徑
+            self.current_project_path = project_path
             project_name = Path(project_path).name
             self.logger.create_separator(f"處理專案: {project_name} (第 {round_number} 輪)")
             
@@ -632,6 +643,16 @@ class CopilotHandler:
             if not self.wait_for_response(use_smart_wait=use_smart_wait):
                 return False, "等待回應超時"
             
+            # 步驟3.5: 智能等待完成後立即執行 CWE 安全檢查
+            if self.cwe_scanner and self.last_response:
+                self.logger.info("🔍 智能等待完成，開始執行 CWE 安全檢查...")
+                vulnerability_detected = self._perform_immediate_cwe_scan(self.last_response)
+                if vulnerability_detected:
+                    # 檢測到高風險漏洞，設置標記但不中斷回應
+                    self.logger.warning("🚨 檢測到高風險 CWE 漏洞，將在處理完成後終止專案")
+                    # 設置專案終止標記（在此方法後續處理中處理）
+                    self._cwe_termination_requested = True
+            
             # 步驟4: 複製回應
             response = self.copy_response()
             if not response:
@@ -649,6 +670,28 @@ class CopilotHandler:
             
             # 確保檔案寫入完成後再繼續（避免競爭條件）
             time.sleep(1)
+            
+            # 步驟6: 處理 CWE 掃描結果（如果有的話）
+            if hasattr(self, '_current_scan_results') and self._current_scan_results:
+                # 生成 CWE 報告到獨立目錄
+                self._generate_cwe_results_report(
+                    self._current_scan_results['vulnerabilities'],
+                    self._current_scan_results['response'],
+                    project_path,
+                    round_number
+                )
+                # 清除暫存的掃描結果
+                self._current_scan_results = None
+            
+            # 步驟7: 檢查是否因 CWE 高風險漏洞需要終止
+            if self._cwe_termination_requested:
+                self.logger.warning("🚨 因檢測到高風險 CWE 漏洞，終止當前專案處理")
+                self.logger.info("✅ 自動化流程仍視為成功（已儲存到 Success 目錄）")
+                self.logger.info("🔍 CWE 掃描結果已儲存到 CWE_Results/Vulnerable 目錄")
+                # 重置終止標記
+                self._cwe_termination_requested = False
+                # 返回成功但附帶特殊訊息
+                return True, "CWE_TERMINATION_SUCCESS"
             
             self.logger.copilot_interaction(f"第 {round_number} 輪處理完成", "SUCCESS", project_name)
             return True, response  # 返回成功狀態和回應內容，供後續輪次使用
@@ -869,6 +912,9 @@ class CopilotHandler:
             bool: 處理是否成功
         """
         try:
+            # 設置當前專案路徑
+            self.current_project_path = project_path
+            
             # 載入互動設定
             interaction_settings = self._load_interaction_settings()
             
@@ -954,6 +1000,11 @@ class CopilotHandler:
                     success_count += 1
                     last_response = result
                     self.logger.info(f"✅ 第 {round_num} 輪互動成功")
+                    
+                    # 檢查是否因 CWE 高風險漏洞需要終止
+                    if result == "CWE_TERMINATION_SUCCESS":
+                        self.logger.warning(f"🚨 因 CWE 高風險漏洞終止多輪互動，已完成 {success_count} 輪")
+                        break
                 else:
                     self.logger.error(f"❌ 第 {round_num} 輪互動失敗: {result}")
                     break
@@ -982,6 +1033,631 @@ class CopilotHandler:
         except Exception as e:
             self.logger.error(f"專案互動處理出錯: {str(e)}")
             return False
+
+    def _perform_immediate_cwe_scan(self, response: str) -> bool:
+        """
+        立即執行 CWE 安全掃描（在 copy_response 中調用）
+        
+        Args:
+            response: 要掃描的回應內容
+            
+        Returns:
+            bool: True 如果發現高風險漏洞，False 否則
+        """
+        try:
+            self.logger.info("🔍 開始立即 CWE 安全掃描...")
+            
+            # 掃描回應內容
+            scan_results_dict = self.cwe_scanner.scan_text(response)
+            
+            if not scan_results_dict:
+                self.logger.info("✅ 立即掃描：未發現安全漏洞")
+                return False
+                
+            # 分析掃描結果
+            all_vulnerabilities = []
+            high_risk_found = False
+            
+            # 處理掃描結果字典
+            for cwe_id, results_list in scan_results_dict.items():
+                for result in results_list:
+                    # 檢查結果是否真的發現漏洞
+                    if hasattr(result, 'vulnerability_found') and not result.vulnerability_found:
+                        continue
+                        
+                    self.logger.warning(f"🚨 立即掃描發現 {result.cwe_id} 漏洞: {result.description}")
+                    self.logger.warning(f"   嚴重性: {result.severity}, 信心度: {result.confidence:.2f}")
+                    
+                    all_vulnerabilities.append({
+                        'cwe_id': result.cwe_id,
+                        'description': result.description,
+                        'severity': result.severity,
+                        'confidence': result.confidence,
+                        'location': result.location,
+                        'evidence': result.evidence,
+                        'mitigation': result.mitigation
+                    })
+                    
+                    # 檢查是否為高風險漏洞
+                    if result.severity in ['High', 'Critical']:
+                        high_risk_found = True
+            
+            # 暫存掃描結果，稍後在 process_project_complete 中生成報告
+            self._current_scan_results = {
+                'vulnerabilities': all_vulnerabilities,
+                'response': response,
+                'high_risk_found': high_risk_found
+            }
+            
+            if high_risk_found:
+                self.logger.error("🚨 立即掃描發現高風險安全漏洞")
+                return True
+            else:
+                self.logger.info("ℹ️ 立即掃描發現低風險漏洞")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"立即 CWE 掃描過程出錯: {str(e)}")
+            return False
+
+    def _perform_post_processing_cwe_scan(self, response: str, project_path: str, round_number: int = 1):
+        """
+        後處理 CWE 安全掃描（不影響自動化流程）
+        
+        Args:
+            response: 要掃描的回應內容
+            project_path: 專案路徑
+            round_number: 互動輪數
+        """
+        try:
+            self.logger.info("🔍 開始後處理 CWE 安全掃描...")
+            
+            # 掃描回應內容
+            scan_results_dict = self.cwe_scanner.scan_text(response)
+            
+            if not scan_results_dict:
+                self.logger.info("✅ CWE 掃描：未發現安全漏洞")
+                # 即使沒有漏洞也要生成報告到 Safe 目錄
+                self._generate_cwe_results_report([], response, project_path, round_number)
+                return
+                
+            # 分析掃描結果
+            all_vulnerabilities = []
+            high_risk_found = False
+            
+            # 處理掃描結果字典
+            for cwe_id, results_list in scan_results_dict.items():
+                for result in results_list:
+                    # 檢查結果是否真的發現漏洞
+                    if hasattr(result, 'vulnerability_found') and not result.vulnerability_found:
+                        continue
+                        
+                    self.logger.warning(f"🚨 CWE 掃描發現 {result.cwe_id} 漏洞: {result.description}")
+                    self.logger.warning(f"   嚴重性: {result.severity}, 信心度: {result.confidence:.2f}")
+                    
+                    all_vulnerabilities.append({
+                        'cwe_id': result.cwe_id,
+                        'description': result.description,
+                        'severity': result.severity,
+                        'confidence': result.confidence,
+                        'location': result.location,
+                        'evidence': result.evidence,
+                        'mitigation': result.mitigation
+                    })
+                    
+                    # 檢查是否為高風險漏洞
+                    if result.severity in ['High', 'Critical']:
+                        high_risk_found = True
+            
+            # 生成 CWE 掃描報告到獨立目錄
+            self._generate_cwe_results_report(all_vulnerabilities, response, project_path, round_number)
+            
+            if high_risk_found:
+                self.logger.warning("🚨 CWE 掃描發現高風險安全漏洞（已記錄到 CWE_Results/Vulnerable）")
+            else:
+                self.logger.info("ℹ️ CWE 掃描發現低風險漏洞（已記錄到 CWE_Results/Safe）")
+                
+        except Exception as e:
+            self.logger.error(f"後處理 CWE 掃描過程出錯: {str(e)}")
+
+    def _generate_cwe_results_report(self, vulnerabilities: list, response_content: str, project_path: str, round_number: int = 1):
+        """
+        生成 CWE 掃描報告到獨立的 CWE_Results 目錄
+        
+        Args:
+            vulnerabilities: 發現的漏洞列表
+            response_content: 掃描的回應內容
+            project_path: 專案路徑
+            round_number: 互動輪數
+        """
+        try:
+            from datetime import datetime
+            import json
+            import os
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            scan_time = datetime.now().isoformat()
+            
+            # 準備報告資料
+            project_name = Path(project_path).name
+            high_risk_count = len([v for v in vulnerabilities if v['severity'] in ['High', 'Critical']])
+            
+            report_data = {
+                'scan_timestamp': scan_time,
+                'scanner_version': '1.0.0',
+                'project_path': project_path,
+                'project_name': project_name,
+                'round_number': round_number,
+                'total_vulnerabilities': len(vulnerabilities),
+                'high_risk_count': high_risk_count,
+                'vulnerabilities': vulnerabilities,
+                'response_content_length': len(response_content),
+                'response_preview': response_content[:500] + "..." if len(response_content) > 500 else response_content
+            }
+            
+            # 判斷結果目錄：有高風險漏洞放到 Vulnerable，否則放到 Safe
+            result_type = "Vulnerable" if high_risk_count > 0 else "Safe"
+            
+            # 在 ExecutionResult/CWE_Results 目錄下生成報告
+            cwe_results_dir = os.path.join("ExecutionResult", "CWE_Results", result_type, project_name)
+            os.makedirs(cwe_results_dir, exist_ok=True)
+            
+            # 生成詳細的 JSON 報告（包含輪數資訊）
+            report_filename = f"cwe_scan_result_第{round_number}輪_{timestamp}.json"
+            report_path = os.path.join(cwe_results_dir, report_filename)
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, ensure_ascii=False, indent=2)
+                
+            self.logger.info(f"📄 CWE 掃描報告已生成: {report_path}")
+            
+            # 生成簡要的 TXT 摘要
+            if len(vulnerabilities) > 0:
+                summary_filename = f"cwe_summary_第{round_number}輪_{timestamp}.txt"
+                summary_path = os.path.join(cwe_results_dir, summary_filename)
+                
+                with open(summary_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== CWE 掃描摘要 - {project_name} 第{round_number}輪 ===\n\n")
+                    f.write(f"掃描時間: {report_data['scan_timestamp']}\n")
+                    f.write(f"總漏洞數: {report_data['total_vulnerabilities']}\n")
+                    f.write(f"高風險漏洞數: {report_data['high_risk_count']}\n")
+                    f.write(f"安全分類: {result_type}\n\n")
+                    
+                    if report_data['high_risk_count'] > 0:
+                        f.write("=== 高風險漏洞詳情 ===\n")
+                        for vuln in vulnerabilities:
+                            if vuln['severity'] in ['High', 'Critical']:
+                                f.write(f"• {vuln['cwe_id']}: {vuln['description']}\n")
+                                f.write(f"  嚴重性: {vuln['severity']}, 信心度: {vuln['confidence']:.2f}\n")
+                                if vuln['evidence']:
+                                    f.write(f"  證據: {vuln['evidence']}\n")
+                                f.write("\n")
+                    
+                    f.write("=== 所有漏洞列表 ===\n")
+                    for vuln in vulnerabilities:
+                        f.write(f"• {vuln['cwe_id']}: {vuln['description']} ({vuln['severity']})\n")
+                
+                self.logger.info(f"📄 CWE 摘要已生成: {summary_path}")
+            else:
+                # 即使沒有漏洞也生成一個簡要報告表示掃描完成
+                summary_filename = f"cwe_scan_clean_第{round_number}輪_{timestamp}.txt"
+                summary_path = os.path.join(cwe_results_dir, summary_filename)
+                
+                with open(summary_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== CWE 掃描結果 - {project_name} 第{round_number}輪 ===\n\n")
+                    f.write(f"掃描時間: {report_data['scan_timestamp']}\n")
+                    f.write(f"掃描結果: 未發現安全漏洞 ✅\n")
+                    f.write(f"安全分類: {result_type}\n")
+                
+                self.logger.info(f"📄 CWE 清潔掃描報告已生成: {summary_path}")
+            
+            # 更新全域統計檔案
+            self._update_cwe_global_statistics(report_data, result_type)
+                
+        except Exception as e:
+            self.logger.error(f"生成 CWE Results 報告時出錯: {str(e)}")
+
+    def _update_cwe_global_statistics(self, report_data: dict, result_type: str):
+        """
+        更新全域 CWE 統計檔案
+        
+        Args:
+            report_data: 報告資料
+            result_type: 結果類型 (Safe/Vulnerable)
+        """
+        try:
+            import json
+            import os
+            
+            # 全域統計檔案路徑
+            global_report_dir = os.path.join("ExecutionResult", "CWEScanner_UpdateReport")
+            os.makedirs(global_report_dir, exist_ok=True)
+            global_stats_path = os.path.join(global_report_dir, "cwe_scan_statistics.json")
+            
+            # 讀取現有統計資料
+            if os.path.exists(global_stats_path):
+                with open(global_stats_path, 'r', encoding='utf-8') as f:
+                    stats_data = json.load(f)
+            else:
+                stats_data = {
+                    'total_scans': 0,
+                    'projects_with_vulnerabilities': 0,
+                    'projects_with_high_risk': 0,
+                    'scan_history': []
+                }
+            
+            # 更新統計資料
+            stats_data['total_scans'] += 1
+            if report_data['total_vulnerabilities'] > 0:
+                stats_data['projects_with_vulnerabilities'] += 1
+            if report_data['high_risk_count'] > 0:
+                stats_data['projects_with_high_risk'] += 1
+            
+            # 記錄這次掃描
+            stats_data['scan_history'].append({
+                'timestamp': report_data['scan_timestamp'],
+                'project_name': report_data['project_name'],
+                'project_path': report_data['project_path'],
+                'round_number': report_data['round_number'],
+                'result_type': result_type,
+                'result_directory': f"ExecutionResult\\CWE_Results\\{result_type}\\{report_data['project_name']}",
+                'total_vulnerabilities': report_data['total_vulnerabilities'],
+                'high_risk_count': report_data['high_risk_count']
+            })
+            
+            # 只保留最近 100 次掃描記錄
+            if len(stats_data['scan_history']) > 100:
+                stats_data['scan_history'] = stats_data['scan_history'][-100:]
+            
+            # 寫入更新的統計資料
+            with open(global_stats_path, 'w', encoding='utf-8') as f:
+                json.dump(stats_data, f, ensure_ascii=False, indent=2)
+                
+            self.logger.info(f"📊 全域 CWE 掃描統計已更新: {global_stats_path}")
+            
+        except Exception as e:
+            self.logger.warning(f"更新全域 CWE 統計失敗: {str(e)}")
+
+    def batch_scan_existing_results(self, target_directory: str = None):
+        """
+        批次掃描現有的自動化結果檔案
+        
+        Args:
+            target_directory: 要掃描的目錄，默認為 ExecutionResult/Success
+        """
+        try:
+            if not self.cwe_scanner:
+                self.logger.error("CWE 掃描器未啟用，無法執行批次掃描")
+                return False
+                
+            if target_directory is None:
+                target_directory = os.path.join("ExecutionResult", "Success")
+            
+            if not os.path.exists(target_directory):
+                self.logger.warning(f"目標目錄不存在: {target_directory}")
+                return False
+                
+            self.logger.create_separator("開始批次 CWE 掃描現有結果")
+            self.logger.info(f"掃描目錄: {target_directory}")
+            
+            scanned_count = 0
+            
+            # 遍歷所有專案目錄
+            for project_name in os.listdir(target_directory):
+                project_dir = os.path.join(target_directory, project_name)
+                if not os.path.isdir(project_dir):
+                    continue
+                    
+                self.logger.info(f"📁 掃描專案: {project_name}")
+                
+                # 尋找所有 markdown 檔案
+                for file_name in os.listdir(project_dir):
+                    if file_name.endswith('.md'):
+                        file_path = os.path.join(project_dir, file_name)
+                        
+                        # 解析檔案名稱獲取輪數資訊
+                        import re
+                        round_match = re.search(r'第(\d+)輪', file_name)
+                        round_number = int(round_match.group(1)) if round_match else 1
+                        
+                        self.logger.info(f"  📄 掃描檔案: {file_name} (第{round_number}輪)")
+                        
+                        # 讀取檔案內容
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                
+                            # 提取 Copilot 回應部分
+                            response_content = self._extract_copilot_response_from_md(content)
+                            
+                            if response_content:
+                                # 模擬專案路徑
+                                mock_project_path = os.path.join("projects", project_name)
+                                
+                                # 執行 CWE 掃描
+                                self._perform_post_processing_cwe_scan(
+                                    response_content, 
+                                    mock_project_path, 
+                                    round_number
+                                )
+                                scanned_count += 1
+                            else:
+                                self.logger.warning(f"    無法提取回應內容: {file_name}")
+                                
+                        except Exception as e:
+                            self.logger.error(f"    掃描檔案時出錯 {file_name}: {str(e)}")
+            
+            self.logger.create_separator(f"批次 CWE 掃描完成，共掃描 {scanned_count} 個檔案")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"批次掃描過程出錯: {str(e)}")
+            return False
+
+    def _extract_copilot_response_from_md(self, content: str) -> str:
+        """
+        從 markdown 檔案中提取 Copilot 回應內容
+        
+        Args:
+            content: markdown 檔案內容
+            
+        Returns:
+            str: 提取的 Copilot 回應內容
+        """
+        try:
+            # 尋找 "## Copilot 回應" 部分
+            import re
+            
+            # 找到 Copilot 回應的開始位置
+            response_start = content.find("## Copilot 回應")
+            if response_start == -1:
+                return ""
+                
+            # 提取回應內容（從標題後開始到檔案結尾）
+            response_content = content[response_start + len("## Copilot 回應"):].strip()
+            
+            return response_content
+            
+        except Exception as e:
+            self.logger.error(f"提取回應內容時出錯: {str(e)}")
+            return ""
+
+    def _perform_cwe_security_check(self, response: str) -> bool:
+        """
+        [DEPRECATED] 執行 CWE 安全漏洞掃描 (舊版方法，已改為後處理)
+        
+        此方法已被 _perform_post_processing_cwe_scan 取代，
+        保留僅為向後相容性，不建議使用。
+        
+        Args:
+            response: 要檢查的回應內容
+            
+        Returns:
+            bool: True 如果發現高風險漏洞，False 否則
+        """
+        try:
+            if not self.cwe_scanner:
+                self.logger.debug("CWE 掃描器未啟用，跳過安全檢查")
+                return False
+                
+            self.logger.info("🔍 開始執行 CWE 安全漏洞掃描...")
+            
+            # 掃描回應內容
+            scan_results_dict = self.cwe_scanner.scan_text(response)
+            
+            if not scan_results_dict:
+                self.logger.info("✅ 未發現安全漏洞")
+                return False
+                
+            # 分析掃描結果
+            high_risk_found = False
+            all_vulnerabilities = []
+            
+            # 處理掃描結果字典
+            for cwe_id, results_list in scan_results_dict.items():
+                for result in results_list:
+                    # 檢查結果是否真的發現漏洞
+                    if hasattr(result, 'vulnerability_found') and not result.vulnerability_found:
+                        continue
+                        
+                    self.logger.warning(f"🚨 發現 {result.cwe_id} 漏洞: {result.description}")
+                    self.logger.warning(f"   嚴重性: {result.severity}, 信心度: {result.confidence:.2f}")
+                    
+                    all_vulnerabilities.append({
+                        'cwe_id': result.cwe_id,
+                        'description': result.description,
+                        'severity': result.severity,
+                        'confidence': result.confidence,
+                        'location': result.location,
+                        'evidence': result.evidence,
+                        'mitigation': result.mitigation
+                    })
+                    
+                    # 檢查是否為高風險漏洞 (注意: 嚴重性使用首字母大寫格式)
+                    if result.severity in ['High', 'Critical']:
+                        high_risk_found = True
+                    
+            # 生成 CWE 掃描報告
+            self._generate_cwe_report(all_vulnerabilities, response)
+            
+            if high_risk_found:
+                self.logger.error("🚨 發現高風險安全漏洞，將終止專案執行")
+                return True
+            else:
+                self.logger.info("ℹ️ 發現低風險漏洞，繼續執行")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"CWE 安全檢查過程出錯: {str(e)}")
+            return False
+            
+    def _generate_cwe_report(self, vulnerabilities: list, response_content: str):
+        """
+        生成 CWE 掃描報告 - 根據掃描結果生成到 ExecutionResult/Success 或 ExecutionResult/Fail 目錄
+        
+        Args:
+            vulnerabilities: 發現的漏洞列表
+            response_content: 掃描的回應內容
+        """
+        try:
+            from datetime import datetime
+            import json
+            import os
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            scan_time = datetime.now().isoformat()
+            
+            # 準備報告資料
+            project_name = Path(self.current_project_path).name if self.current_project_path else 'Unknown'
+            high_risk_count = len([v for v in vulnerabilities if v['severity'] in ['High', 'Critical']])
+            
+            report_data = {
+                'scan_timestamp': scan_time,
+                'scanner_version': '1.0.0',
+                'project_path': self.current_project_path,
+                'project_name': project_name,
+                'total_vulnerabilities': len(vulnerabilities),
+                'high_risk_count': high_risk_count,
+                'vulnerabilities': vulnerabilities,
+                'response_content_length': len(response_content),
+                'response_preview': response_content[:500] + "..." if len(response_content) > 500 else response_content
+            }
+            
+            # 判斷結果目錄：有高風險漏洞放到 Fail，否則放到 Success
+            result_type = "Fail" if high_risk_count > 0 else "Success"
+            
+            # 1. 在 ExecutionResult 目錄下生成報告
+            execution_result_dir = os.path.join("ExecutionResult", result_type, project_name)
+            os.makedirs(execution_result_dir, exist_ok=True)
+            
+            # 生成詳細的 JSON 報告
+            report_filename = f"cwe_scan_result_{timestamp}.json"
+            report_path = os.path.join(execution_result_dir, report_filename)
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, ensure_ascii=False, indent=2)
+                
+            self.logger.info(f"📄 CWE 掃描報告已生成: {report_path}")
+            
+            # 生成簡要的 TXT 摘要
+            if len(vulnerabilities) > 0:
+                summary_filename = f"cwe_summary_{timestamp}.txt"
+                summary_path = os.path.join(execution_result_dir, summary_filename)
+                
+                with open(summary_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== CWE 掃描摘要 - {project_name} ===\n\n")
+                    f.write(f"掃描時間: {report_data['scan_timestamp']}\n")
+                    f.write(f"總漏洞數: {report_data['total_vulnerabilities']}\n")
+                    f.write(f"高風險漏洞數: {report_data['high_risk_count']}\n")
+                    f.write(f"結果狀態: {result_type}\n\n")
+                    
+                    if report_data['high_risk_count'] > 0:
+                        f.write("=== 高風險漏洞詳情 ===\n")
+                        for vuln in vulnerabilities:
+                            if vuln['severity'] in ['High', 'Critical']:
+                                f.write(f"• {vuln['cwe_id']}: {vuln['description']}\n")
+                                f.write(f"  嚴重性: {vuln['severity']}, 信心度: {vuln['confidence']:.2f}\n")
+                                if vuln['evidence']:
+                                    f.write(f"  證據: {vuln['evidence']}\n")
+                                f.write("\n")
+                    
+                    f.write("=== 所有漏洞列表 ===\n")
+                    for vuln in vulnerabilities:
+                        f.write(f"• {vuln['cwe_id']}: {vuln['description']} ({vuln['severity']})\n")
+                
+                self.logger.info(f"📄 CWE 摘要已生成: {summary_path}")
+            else:
+                # 即使沒有漏洞也生成一個簡要報告表示掃描完成
+                summary_filename = f"cwe_scan_clean_{timestamp}.txt"
+                summary_path = os.path.join(execution_result_dir, summary_filename)
+                
+                with open(summary_path, 'w', encoding='utf-8') as f:
+                    f.write(f"=== CWE 掃描結果 - {project_name} ===\n\n")
+                    f.write(f"掃描時間: {report_data['scan_timestamp']}\n")
+                    f.write(f"掃描結果: 未發現安全漏洞 ✅\n")
+                    f.write(f"結果狀態: {result_type}\n")
+                
+                self.logger.info(f"📄 CWE 清潔掃描報告已生成: {summary_path}")
+            
+            # 2. 在全域目錄維護統計資料和警報（作為快速總覽）
+            global_report_dir = os.path.join("ExecutionResult", "CWEScanner_UpdateReport")
+            os.makedirs(global_report_dir, exist_ok=True)
+            
+            # 如果有高風險漏洞，在全域目錄生成警報檔案
+            if report_data['high_risk_count'] > 0:
+                global_alert_path = os.path.join(global_report_dir, f"cwe_high_risk_alert_{timestamp}.txt")
+                with open(global_alert_path, 'w', encoding='utf-8') as f:
+                    f.write("=== CWE 高風險安全漏洞警報 ===\n\n")
+                    f.write(f"專案名稱: {report_data['project_name']}\n")
+                    f.write(f"專案路徑: {report_data['project_path']}\n")
+                    f.write(f"結果目錄: ExecutionResult\\{result_type}\\{project_name}\n")
+                    f.write(f"掃描時間: {report_data['scan_timestamp']}\n")
+                    f.write(f"發現高風險漏洞數量: {report_data['high_risk_count']}\n\n")
+                    f.write("=== 高風險漏洞詳情 ===\n")
+                    
+                    for vuln in vulnerabilities:
+                        if vuln['severity'] in ['High', 'Critical']:
+                            f.write(f"漏洞 ID: {vuln['cwe_id']}\n")
+                            f.write(f"描述: {vuln['description']}\n")
+                            f.write(f"嚴重性: {vuln['severity']}\n")
+                            f.write(f"信心度: {vuln['confidence']:.2f}\n")
+                            if vuln['evidence']:
+                                f.write(f"證據: {vuln['evidence']}\n")
+                            if vuln['mitigation']:
+                                f.write(f"緩解措施: {vuln['mitigation']}\n")
+                            f.write("-" * 50 + "\n")
+                            
+                self.logger.warning(f"🚨 全域高風險漏洞警報已生成: {global_alert_path}")
+            
+            # 3. 更新全域統計檔案（追蹤所有專案的掃描狀況）
+            global_stats_path = os.path.join(global_report_dir, "cwe_scan_statistics.json")
+            
+            # 讀取現有統計資料
+            try:
+                if os.path.exists(global_stats_path):
+                    with open(global_stats_path, 'r', encoding='utf-8') as f:
+                        stats_data = json.load(f)
+                else:
+                    stats_data = {
+                        'total_scans': 0,
+                        'projects_with_vulnerabilities': 0,
+                        'projects_with_high_risk': 0,
+                        'scan_history': []
+                    }
+                
+                # 更新統計資料
+                stats_data['total_scans'] += 1
+                if len(vulnerabilities) > 0:
+                    stats_data['projects_with_vulnerabilities'] += 1
+                if report_data['high_risk_count'] > 0:
+                    stats_data['projects_with_high_risk'] += 1
+                
+                # 記錄這次掃描
+                stats_data['scan_history'].append({
+                    'timestamp': scan_time,
+                    'project_name': report_data['project_name'],
+                    'project_path': report_data['project_path'],
+                    'result_type': result_type,
+                    'result_directory': f"ExecutionResult\\{result_type}\\{project_name}",
+                    'total_vulnerabilities': report_data['total_vulnerabilities'],
+                    'high_risk_count': report_data['high_risk_count']
+                })
+                
+                # 只保留最近 100 次掃描記錄
+                if len(stats_data['scan_history']) > 100:
+                    stats_data['scan_history'] = stats_data['scan_history'][-100:]
+                
+                # 寫入更新的統計資料
+                with open(global_stats_path, 'w', encoding='utf-8') as f:
+                    json.dump(stats_data, f, ensure_ascii=False, indent=2)
+                    
+                self.logger.info(f"📊 全域掃描統計已更新: {global_stats_path}")
+                
+            except Exception as e:
+                self.logger.warning(f"更新全域統計失敗: {str(e)}")
+                
+        except Exception as e:
+            self.logger.error(f"生成 CWE 報告時出錯: {str(e)}")
 
 # 創建全域實例
 copilot_handler = CopilotHandler()

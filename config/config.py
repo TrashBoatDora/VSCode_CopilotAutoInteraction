@@ -80,6 +80,13 @@ class Config:
     # CopilotChat 修改結果處理設定
     COPILOT_CHAT_MODIFICATION_ACTION = "keep"  # 預設行為：'keep'(保留) 或 'revert'(復原)
     
+    # CWE 漏洞檢查設定
+    CWE_SCANNER_ENABLED = False  # 是否啟用 CWE 漏洞檢查
+    CWE_SCANNER_SEVERITY_THRESHOLD = "High"  # 觸發終止的最低嚴重性等級：Low, Medium, High, Critical
+    CWE_SCANNER_ENABLED_SCANNERS = None  # 啟用的掃描器列表，None 表示全部啟用
+    CWE_REPORT_ENABLED = True  # 是否生成 CWE 分析報告
+    CWE_TERMINATE_ON_VULNERABILITY = True  # 檢測到漏洞時是否終止專案
+    
     # 日誌設定
     LOG_LEVEL = "INFO"      # 日誌等級：DEBUG, INFO, WARNING, ERROR
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
