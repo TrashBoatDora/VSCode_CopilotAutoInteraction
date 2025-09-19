@@ -674,9 +674,16 @@ class CopilotHandler:
         """
         try:
             self.logger.info("清除 Copilot Chat 記錄...")
-            # 使用控制器進行記憶清除
+            # 使用控制器進行記憶清除，獲取設定參數
             from src.vscode_controller import vscode_controller
-            result = vscode_controller.clear_copilot_memory()
+            from config.config import config
+            
+            # 獲取修改結果處理設定
+            modification_action = config.COPILOT_CHAT_MODIFICATION_ACTION
+            if self.interaction_settings:
+                modification_action = self.interaction_settings.get("copilot_chat_modification_action", modification_action)
+            
+            result = vscode_controller.clear_copilot_memory(modification_action)
             return result
         except Exception as e:
             self.logger.error(f"清除聊天記錄失敗: {str(e)}")
@@ -923,9 +930,16 @@ class CopilotHandler:
                         self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞")
                 
                 if round_num > 1:
-                    # 清除 Copilot 記憶（每輪獨立）
+                    # 清除 Copilot 記憶（每輪獨立），使用正確的設定參數
                     from src.vscode_controller import vscode_controller
-                    vscode_controller.clear_copilot_memory()
+                    from config.config import config
+                    
+                    # 獲取修改結果處理設定
+                    modification_action = config.COPILOT_CHAT_MODIFICATION_ACTION
+                    if self.interaction_settings:
+                        modification_action = self.interaction_settings.get("copilot_chat_modification_action", modification_action)
+                    
+                    vscode_controller.clear_copilot_memory(modification_action)
                     time.sleep(1)  # 等待記憶清除完成
                 
                 # 處理本輪互動

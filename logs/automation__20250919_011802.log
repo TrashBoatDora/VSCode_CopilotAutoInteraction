@@ -1,0 +1,49 @@
+2025-09-19 01:18:02,649 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_011802.log
+2025-09-19 01:18:02,651 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 01:18:27,718 - CopilotHandler - INFO - 使用外部提供的互動設定: {'interaction_enabled': True, 'max_rounds': 2, 'include_previous_response': False, 'round_delay': 2, 'copilot_chat_modification_action': 'revert'}
+2025-09-19 01:18:27,729 - CopilotHandler - INFO - ========================= 開始處理專案 sample_project，計劃互動 2 輪 ===
+2025-09-19 01:18:27,732 - CopilotHandler - INFO - 回應串接功能: 停用
+2025-09-19 01:18:27,750 - CopilotHandler - INFO - ========================= 開始第 1 輪互動 ========================
+2025-09-19 01:18:27,751 - CopilotHandler - INFO - 第 1 輪：使用第一輪提示詞 (prompt1.txt)
+2025-09-19 01:18:27,752 - CopilotHandler - INFO - ========================= 處理專案: sample_project (第 1 輪) =====
+2025-09-19 01:18:27,753 - CopilotHandler - INFO - 開啟 Copilot Chat...
+2025-09-19 01:18:30,875 - CopilotHandler - INFO - ✅ Copilot 開啟 Chat 面板
+2025-09-19 01:18:30,876 - CopilotHandler - INFO - 發送提示詞到 Copilot Chat...
+2025-09-19 01:18:35,074 - CopilotHandler - INFO - ✅ Copilot 發送提示詞 - 長度: 82 字元
+2025-09-19 01:18:35,077 - CopilotHandler - INFO - 等待 Copilot 回應 (超時: 300秒, 智能等待: 開啟)...
+2025-09-19 01:18:35,077 - CopilotHandler - INFO - 智能等待 Copilot 回應，最長等待 300 秒...
+2025-09-19 01:18:35,079 - CopilotHandler - INFO - 初始等待 2 秒...
+2025-09-19 01:18:51,827 - CopilotHandler - INFO - ✅ 檢測到 Copilot 開始回應
+2025-09-19 01:19:34,147 - CopilotHandler - INFO - ✅ 圖像檢測確認：Copilot 回應已完成（檢測到 send 按鈕）
+2025-09-19 01:19:40,562 - CopilotHandler - INFO - 🎉 完成等待！(圖像檢測, 65.5秒, 2014字元)
+2025-09-19 01:19:40,565 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 01:19:46,933 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 2014 字元
+2025-09-19 01:19:46,943 - CopilotHandler - INFO - 儲存回應到: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\Success\sample_project\20250919_0119_第1輪.md
+2025-09-19 01:19:46,954 - CopilotHandler - INFO - ✅ Copilot 儲存回應 - 檔案: 20250919_0119_第1輪.md
+2025-09-19 01:19:48,459 - CopilotHandler - INFO - ✅ Copilot 第 1 輪處理完成 - sample_project
+2025-09-19 01:19:48,460 - CopilotHandler - INFO - ✅ 第 1 輪互動成功
+2025-09-19 01:19:48,461 - CopilotHandler - INFO - 等待 2 秒後進行下一輪...
+2025-09-19 01:19:50,464 - CopilotHandler - INFO - ========================= 開始第 2 輪互動 ========================
+2025-09-19 01:19:50,471 - CopilotHandler - INFO - 第 2 輪：使用第二輪提示詞 (prompt2.txt)
+2025-09-19 01:19:50,472 - CopilotHandler - INFO - 第 2 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞
+2025-09-19 01:19:57,967 - CopilotHandler - INFO - ========================= 處理專案: sample_project (第 2 輪) =====
+2025-09-19 01:19:57,971 - CopilotHandler - INFO - 開啟 Copilot Chat...
+2025-09-19 01:20:01,088 - CopilotHandler - INFO - ✅ Copilot 開啟 Chat 面板
+2025-09-19 01:20:01,090 - CopilotHandler - INFO - 發送提示詞到 Copilot Chat...
+2025-09-19 01:20:05,262 - CopilotHandler - INFO - ✅ Copilot 發送提示詞 - 長度: 11 字元
+2025-09-19 01:20:05,264 - CopilotHandler - INFO - 等待 Copilot 回應 (超時: 300秒, 智能等待: 開啟)...
+2025-09-19 01:20:05,264 - CopilotHandler - INFO - 智能等待 Copilot 回應，最長等待 300 秒...
+2025-09-19 01:20:05,265 - CopilotHandler - INFO - 初始等待 2 秒...
+2025-09-19 01:20:13,845 - CopilotHandler - INFO - ✅ 檢測到 Copilot 開始回應
+2025-09-19 01:20:15,586 - CopilotHandler - INFO - ✅ 圖像檢測確認：Copilot 回應已完成（檢測到 send 按鈕）
+2025-09-19 01:20:21,972 - CopilotHandler - INFO - 🎉 完成等待！(圖像檢測, 16.7秒, 133字元)
+2025-09-19 01:20:21,974 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 01:20:28,353 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 133 字元
+2025-09-19 01:20:28,360 - CopilotHandler - INFO - 儲存回應到: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\ExecutionResult\Success\sample_project\20250919_0120_第2輪.md
+2025-09-19 01:20:28,367 - CopilotHandler - INFO - ✅ Copilot 儲存回應 - 檔案: 20250919_0120_第2輪.md
+2025-09-19 01:20:29,871 - CopilotHandler - INFO - ✅ Copilot 第 2 輪處理完成 - sample_project
+2025-09-19 01:20:29,873 - CopilotHandler - INFO - ✅ 第 2 輪互動成功
+2025-09-19 01:20:29,873 - CopilotHandler - INFO - 所有互動輪次完成，進入穩定期 5 秒...
+2025-09-19 01:20:34,875 - CopilotHandler - INFO - ✅ sample_project 所有互動輪次成功完成
+2025-09-19 01:20:42,896 - CopilotHandler - INFO - 複製 Copilot 回應 (第 1/3 次)...
+2025-09-19 01:20:49,238 - CopilotHandler - INFO - ✅ Copilot 複製回應 - 長度: 133 字元

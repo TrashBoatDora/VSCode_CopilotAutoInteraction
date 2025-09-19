@@ -20,7 +20,7 @@ class InteractionSettingsUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Copilot Chat 多輪互動設定")
-        self.root.geometry("600x500")  # 增大視窗尺寸
+        self.root.geometry("650x650")  # 增大視窗尺寸以容納新功能
         self.root.resizable(False, False)
         
         # 設定關閉事件處理
@@ -45,7 +45,8 @@ class InteractionSettingsUI:
             "interaction_enabled": interaction_settings.get("enabled", config.INTERACTION_ENABLED),
             "max_rounds": interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS),
             "include_previous_response": interaction_settings.get("include_previous_response", config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE),
-            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY)
+            "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY),
+            "copilot_chat_modification_action": interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION)
         }
     
     def save_settings(self):
@@ -60,7 +61,8 @@ class InteractionSettingsUI:
                 "max_rounds": self.settings["max_rounds"],
                 "include_previous_response": self.settings["include_previous_response"],
                 "round_delay": self.settings["round_delay"],
-                "show_ui_on_startup": True
+                "show_ui_on_startup": True,
+                "copilot_chat_modification_action": self.settings["copilot_chat_modification_action"]
             }
             
             return settings_manager.update_interaction_settings(interaction_settings)
@@ -160,6 +162,58 @@ class InteractionSettingsUI:
         explanation_text.insert("1.0", explanation_content)
         explanation_text.config(state="disabled")
         
+        # CopilotChat 修改結果處理設定框架
+        modification_frame = ttk.LabelFrame(main_frame, text="CopilotChat 修改結果處理")
+        modification_frame.pack(fill="x", pady=10)
+        
+        # 修改結果處理選項
+        modification_action_frame = ttk.Frame(modification_frame)
+        modification_action_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(modification_action_frame, text="當 Copilot 修改代碼時:").pack(anchor="w", pady=(5, 2))
+        
+        self.modification_action_var = tk.StringVar(
+            value=self.settings["copilot_chat_modification_action"]
+        )
+        
+        # 保留選項
+        keep_radio = ttk.Radiobutton(
+            modification_action_frame,
+            text="保留修改 (按 Enter)",
+            variable=self.modification_action_var,
+            value="keep"
+        )
+        keep_radio.pack(anchor="w", padx=20, pady=2)
+        
+        # 復原選項
+        revert_radio = ttk.Radiobutton(
+            modification_action_frame,
+            text="復原修改 (按右鍵 + Enter)",
+            variable=self.modification_action_var,
+            value="revert"
+        )
+        revert_radio.pack(anchor="w", padx=20, pady=2)
+        
+        # 修改結果處理說明
+        modification_explanation_text = tk.Text(
+            modification_frame,
+            height=3,
+            width=60,
+            wrap="word",
+            state="disabled",
+            bg=self.root.cget("bg"),
+            font=("Arial", 9)
+        )
+        modification_explanation_text.pack(padx=10, pady=5, fill="x")
+        
+        modification_explanation_content = """說明：
+• 保留修改：當 Copilot 修改代碼並提示保存時，自動選擇保留修改
+• 復原修改：當 Copilot 修改代碼並提示保存時，自動選擇復原修改"""
+        
+        modification_explanation_text.config(state="normal")
+        modification_explanation_text.insert("1.0", modification_explanation_content)
+        modification_explanation_text.config(state="disabled")
+        
         # 按鈕框架
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill="x", pady=30)  # 增加 padding
@@ -227,6 +281,7 @@ class InteractionSettingsUI:
         self.interaction_enabled_var.set(True)
         self.max_rounds_var.set(3)
         self.include_previous_var.set(True)
+        self.modification_action_var.set("keep")
         self.on_interaction_enabled_changed()
     
     def save_and_close(self):
@@ -236,6 +291,7 @@ class InteractionSettingsUI:
         self.settings["max_rounds"] = self.max_rounds_var.get()
         self.settings["include_previous_response"] = self.include_previous_var.get()
         self.settings["round_delay"] = config.INTERACTION_ROUND_DELAY  # 使用預設值
+        self.settings["copilot_chat_modification_action"] = self.modification_action_var.get()
         
         # 直接關閉視窗，開始執行腳本
         self.root.destroy()

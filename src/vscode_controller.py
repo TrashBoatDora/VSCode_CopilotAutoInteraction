@@ -623,15 +623,19 @@ class VSCodeController:
             self.logger.error(f"聚焦 VS Code 視窗時發生錯誤: {str(e)}")
             return False
     
-    def clear_copilot_memory(self) -> bool:
+    def clear_copilot_memory(self, modification_action: str = "keep") -> bool:
         """
         清除 Copilot Chat 記憶，包含智能檢測和處理保存對話提示
+        
+        Args:
+            modification_action: 當檢測到修改保存提示時的行為 - "keep"(保留) 或 "revert"(復原)
         
         Returns:
             bool: 清除是否成功
         """
         try:
             self.logger.info("開始清除 Copilot Chat 記憶...")
+            self.logger.info(f"修改結果處理模式: {modification_action}")
             
             # 導入圖像識別模組
             from src.image_recognition import check_newchat_save_dialog, handle_newchat_save_dialog
@@ -653,9 +657,11 @@ class VSCodeController:
                     
                     # 檢查是否出現 NewChat_Save 對話框（等待2秒）
                     if check_newchat_save_dialog(timeout=2):
-                        self.logger.info("檢測到保存對話提示，按下 Enter 保留並繼續")
-                        if handle_newchat_save_dialog():
-                            self.logger.info("✅ 成功處理保存對話提示，保留 Copilot 的代碼修改")
+                        action_desc = "保留修改" if modification_action == "keep" else "復原修改"
+                        self.logger.info(f"檢測到保存對話提示，執行 {action_desc} 操作")
+                        
+                        if handle_newchat_save_dialog(modification_action):
+                            self.logger.info(f"✅ 成功處理保存對話提示，已{action_desc}")
                         else:
                             self.logger.warning("⚠️ 處理保存對話提示時發生問題")
                     else:

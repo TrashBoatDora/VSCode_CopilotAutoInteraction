@@ -526,21 +526,37 @@ class ImageRecognition:
             self.logger.debug(f"檢查保存新聊天對話框時發生錯誤: {str(e)}")
             return False
     
-    def handle_newchat_save_dialog(self) -> bool:
+    def handle_newchat_save_dialog(self, action: str = "keep") -> bool:
         """
-        處理 NewChat_Save 對話框，按 Enter 保留並繼續
+        處理 NewChat_Save 對話框
+        
+        Args:
+            action: 處理行為 - "keep"(保留並繼續) 或 "revert"(復原修改)
         
         Returns:
             bool: 處理是否成功
         """
         try:
-            self.logger.info("處理保存新聊天對話框，按下 Enter 保留並繼續...")
+            if action == "keep":
+                self.logger.info("處理保存新聊天對話框，按下 Enter 保留並繼續...")
+                # 按下 Enter 鍵 (保留並繼續)
+                pyautogui.press('enter')
+                time.sleep(1)
+                self.logger.info("✅ 已按下 Enter，保留並繼續聊天")
+            elif action == "revert":
+                self.logger.info("處理保存新聊天對話框，按右鍵後按 Enter 復原修改...")
+                # 按右鍵選擇復原，然後按 Enter
+                pyautogui.press('right')
+                time.sleep(1)
+                pyautogui.press('enter')
+                time.sleep(1)
+                self.logger.info("✅ 已按右鍵+Enter，復原修改")
+            else:
+                self.logger.warning(f"⚠️ 未知的處理行為: {action}，使用預設行為 'keep'")
+                pyautogui.press('enter')
+                time.sleep(1)
+                self.logger.info("✅ 使用預設行為，保留並繼續聊天")
             
-            # 按下 Enter 鍵
-            pyautogui.press('enter')
-            time.sleep(1)
-            
-            self.logger.info("✅ 已按下 Enter，保留並繼續聊天")
             return True
             
         except Exception as e:
@@ -703,6 +719,6 @@ def check_newchat_save_dialog(timeout: int = 2) -> bool:
     """檢查是否出現保存新聊天對話框的便捷函數"""
     return image_recognition.check_newchat_save_dialog(timeout)
 
-def handle_newchat_save_dialog() -> bool:
+def handle_newchat_save_dialog(action: str = "keep") -> bool:
     """處理保存新聊天對話框的便捷函數"""
-    return image_recognition.handle_newchat_save_dialog()
+    return image_recognition.handle_newchat_save_dialog(action)

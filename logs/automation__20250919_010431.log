@@ -1,0 +1,36 @@
+2025-09-19 01:04:31,311 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,312 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-19 01:04:31,319 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,325 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {7236, 8548, 10212, 3848, 11240, 5612, 2860, 2544, 2736, 12400, 7380, 7476, 9844, 10232}
+2025-09-19 01:04:31,473 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,475 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 01:04:31,486 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,487 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 01:04:31,697 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,698 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-19 01:04:31,707 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,708 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-19 01:04:31,722 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,724 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-19 01:04:31,747 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,789 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,790 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-19 01:04:31,810 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,812 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {7236, 8548, 10212, 3848, 11240, 5612, 2860, 2544, 2736, 12400, 7380, 7476, 9844, 10232}
+2025-09-19 01:04:31,829 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,834 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-19 01:04:31,874 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,876 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-19 01:04:31,902 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,905 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 01:04:31,932 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:31,933 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-19 01:04:32,072 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_010431.log
+2025-09-19 01:04:32,173 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-19 01:04:32,178 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-19 01:04:32,281 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-19 01:04:36,195 - MainController - INFO - 清理執行環境...
+2025-09-19 01:04:36,220 - VSCodeController - INFO - 確保乾淨的執行環境...
+2025-09-19 01:04:36,224 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-19 01:04:42,407 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-19 01:04:42,409 - MainController - INFO - ✅ 環境清理完成

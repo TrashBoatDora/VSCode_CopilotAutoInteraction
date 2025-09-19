@@ -337,7 +337,10 @@ class HybridUIAutomationScript:
             
             # 步驟2: 清除 Copilot 記憶
             project_logger.log("清除 Copilot Chat 記憶")
-            if not self.vscode_controller.clear_copilot_memory():
+            # 獲取修改結果處理設定
+            modification_action = self.interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION) if self.interaction_settings else config.COPILOT_CHAT_MODIFICATION_ACTION
+            self.logger.info(f"修改結果處理設定: {modification_action}")
+            if not self.vscode_controller.clear_copilot_memory(modification_action):
                 self.logger.warning("Copilot 記憶清除失敗，但繼續執行")
             
             # 檢查中斷請求

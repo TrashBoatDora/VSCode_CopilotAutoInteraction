@@ -77,6 +77,9 @@ class Config:
     INTERACTION_RESPONSE_CHAINING_PREFIX = "我們繼續基於前一次的討論。你的上一次回答是：\n\n"  # 回應串接前綴
     INTERACTION_RESPONSE_CHAINING_SUFFIX = "\n\n現在，請針對以下問題或指示繼續：\n\n"  # 回應串接後綴
     
+    # CopilotChat 修改結果處理設定
+    COPILOT_CHAT_MODIFICATION_ACTION = "keep"  # 預設行為：'keep'(保留) 或 'revert'(復原)
+    
     # 日誌設定
     LOG_LEVEL = "INFO"      # 日誌等級：DEBUG, INFO, WARNING, ERROR
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
