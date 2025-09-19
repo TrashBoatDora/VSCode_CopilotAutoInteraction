@@ -197,57 +197,108 @@ python main.py
 ## 技術細節
 
 ### 核心技術
+# VSCode Copilot Chat Hybrid UI Automation Script (CWE 分離架構版)
 
-- **pyautogui**：UI 自動化操作（圖像辨識+鍵盤快捷鍵）
-- **opencv-python**：圖像辨識
-- **pyperclip**：剪貼簿操作（解決中文輸入法問題）
-- **psutil**：進程管理
-- **subprocess**：程式啟動控制
-
-### 設計原則
-
-- **穩定性優先**：圖像辨識+鍵盤操作，兼顧多語環境與 UI 變化
-- **可觀測性**：詳細的日誌和狀態追蹤
-- **容錯性**：完善的錯誤處理和恢復機制
-- **可維護性**：清晰的模組分離和代碼結構
-- **記憶隔離**：每個專案獨立處理，避免交叉污染
+本專案為 VSCode Copilot Chat 的多輪互動自動化腳本，結合圖像辨識、智能等待、CWE 安全掃描分離架構，實現高效、穩定且安全的自動化程式碼生成與風險分析。
 
 ---
 
+## 主要特色
 
-## 貢獻指南
-
-歡迎提交 Issue 和 Pull Request。在開發新功能時，請：
-1. 遵循現有的代碼風格
-2. 添加適當的測試
-3. 更新相關文檔
-4. 確保向後兼容性
-
----
-
-
-## 授權條款
-
-本專案基於 MIT 授權條款發布。
+- **多輪互動自動化**：支援多輪 prompt 互動，完整模擬 Copilot Chat 對話流程
+- **智能等待與圖像辨識**：以 send/stop 按鈕與內容穩定性判斷回應完成，並自動清除 VS Code 通知遮擋
+- **CWE 安全掃描分離**：每輪回應完成後立即執行 8 類 CWE 安全掃描，並將結果獨立分類於 Safe/Vulnerable 目錄
+- **自動化與安全結果完全分離**：自動化流程的成功/失敗與安全風險分類互不干擾
+- **智能終止**：發現高風險漏洞即時終止後續輪次，但已完成輪次仍保留
+- **批次處理與日誌追蹤**：支援大規模專案批次處理、詳細日誌與全域統計
 
 ---
 
+## 目錄結構
 
-## 更新日誌
+```
+VSCode_CopilotAutoInteraction/
+├── ExecutionResult/
+│   ├── Success/           # 自動化成功結果
+│   ├── Fail/              # 自動化失敗結果
+│   ├── CWE_Results/       # 安全風險獨立分類
+│   │   ├── Safe/
+│   │   └── Vulnerable/
+│   └── CWEScanner_UpdateReport/ # 全域統計與警報
+├── projects/              # 原始專案，僅存原始碼與狀態檔
+├── src/                   # 核心程式碼
+├── docs/                  # 技術報告與設計說明
+├── requirements.txt
+└── README.md
+```
 
-### v1.2.0 (2025-09-15)
-- 圖像辨識與鍵盤自動化混合，強化通知清除與智能等待
-- 剪貼簿貼上命令解決中文輸入法干擾
-- 智能等待邏輯簡化，只保留圖像辨識與回應穩定性檢查
-- 執行結果集中管理，專案目錄保持乾淨
+---
 
-### v1.1.0 (2025-09-13)
-- 完全移除圖像辨識與滑鼠操作，純鍵盤自動化
-- Copilot 記憶體清除、回應複製/關閉強化
-- ProjectStatusReset.py 支援自動刪除 Copilot_AutoComplete 報告
+## 安裝與設定
 
-### v1.0.0 (2024-12-12)
-- 初始版本發布
-- 完整的模組化架構
-- 支援大規模專案批次處理
-- 智能錯誤處理和恢復機制
+1. 安裝 Python 依賴
+  ```bash
+  pip install -r requirements.txt
+  ```
+2. 將待處理專案放入 `projects/` 目錄
+3. 編輯 `prompts/` 內的 prompt 檔案（多輪互動可用 prompt1.txt、prompt2.txt ...）
+4. 調整 `config/config.py` 參數（如等待時間、批次大小等）
+
+---
+
+## 執行方式
+
+```bash
+python main.py
+```
+依照互動式視窗選擇執行選項。
+
+---
+
+## 自動化與安全掃描流程
+
+1. 掃描 `projects/` 目錄下所有專案
+2. 每個專案進行多輪 Copilot Chat 互動
+3. 每輪流程：
+  - 發送 prompt
+  - 智能等待回應完成
+  - **立即執行 CWE 安全掃描**
+  - 複製回應並儲存
+  - 生成安全報告到獨立目錄
+  - 若發現高風險漏洞，終止後續輪次
+4. 所有結果自動分類儲存，並產生全域統計
+
+---
+
+## 安全掃描與目錄分類
+
+- **Success/Fail**：純粹反映自動化流程技術狀態
+- **CWE_Results/Safe/Vulnerable**：純粹反映安全風險等級
+- **CWEScanner_UpdateReport/**：全域統計與高風險警報
+
+---
+
+## 常見問題與故障排除
+
+- 請參考 `docs/Reports/` 及日誌檔案獲取詳細錯誤說明與解決方案
+- 若需重置狀態，請執行 `ProjectStatusReset.py`
+
+---
+
+## 技術報告與設計依據
+
+本專案架構與邏輯完全依據下列技術報告設計與驗證：
+- `20250919_cwe_logic_correction_report.md`
+- `20250919_cwe_path_structure_fix_report.md`
+- `20250919_cwe_separation_architecture_report.md`
+- `20250919_cwe_architecture_and_logic_summary.md`
+
+---
+
+## 授權
+
+MIT License
+
+---
+
+如需進一步技術細節、架構說明或貢獻指南，請參閱 `docs/` 目錄下相關文件。
