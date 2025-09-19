@@ -1,5 +1,5 @@
 {
-  "last_updated": "2025-09-19T01:33:43.200911",
+  "last_updated": "2025-09-19T01:54:26.339002",
   "projects": [
     {
       "name": "sample_project",
@@ -11,48 +11,9 @@
         "main.py",
         "Calculator.java"
       ],
-      "last_processed": "2025-09-19T01:33:41.156348",
+      "last_processed": "2025-09-19T01:54:26.338994",
       "error_message": null,
-      "processing_time": 183.57825684547424,
-      "retry_count": 0
-    },
-    {
-      "name": "system-design-primer",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\system-design-primer",
-      "status": "processing",
-      "has_copilot_file": false,
-      "file_count": 26,
-      "supported_files": [
-        "solutions\\system_design\\mint\\mint_mapreduce.py",
-        "solutions\\system_design\\mint\\mint_snippets.py",
-        "solutions\\system_design\\mint\\__init__.py",
-        "solutions\\system_design\\pastebin\\pastebin.py",
-        "solutions\\system_design\\pastebin\\__init__.py",
-        "solutions\\system_design\\query_cache\\query_cache_snippets.py",
-        "solutions\\system_design\\query_cache\\__init__.py",
-        "solutions\\system_design\\sales_rank\\sales_rank_mapreduce.py",
-        "solutions\\system_design\\sales_rank\\__init__.py",
-        "solutions\\system_design\\social_graph\\social_graph_snippets.py",
-        "solutions\\system_design\\social_graph\\__init__.py",
-        "solutions\\system_design\\web_crawler\\web_crawler_mapreduce.py",
-        "solutions\\system_design\\web_crawler\\web_crawler_snippets.py",
-        "solutions\\system_design\\web_crawler\\__init__.py",
-        "solutions\\object_oriented_design\\call_center\\call_center.py",
-        "solutions\\object_oriented_design\\call_center\\__init__.py",
-        "solutions\\object_oriented_design\\deck_of_cards\\deck_of_cards.py",
-        "solutions\\object_oriented_design\\deck_of_cards\\__init__.py",
-        "solutions\\object_oriented_design\\hash_table\\hash_map.py",
-        "solutions\\object_oriented_design\\hash_table\\__init__.py",
-        "solutions\\object_oriented_design\\lru_cache\\lru_cache.py",
-        "solutions\\object_oriented_design\\lru_cache\\__init__.py",
-        "solutions\\object_oriented_design\\online_chat\\online_chat.py",
-        "solutions\\object_oriented_design\\online_chat\\__init__.py",
-        "solutions\\object_oriented_design\\parking_lot\\parking_lot.py",
-        "solutions\\object_oriented_design\\parking_lot\\__init__.py"
-      ],
-      "last_processed": "2025-09-19T01:33:43.200903",
-      "error_message": null,
-      "processing_time": null,
+      "processing_time": 134.82711219787598,
       "retry_count": 0
     }
   ]
