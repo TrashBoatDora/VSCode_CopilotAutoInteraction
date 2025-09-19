@@ -1,0 +1,25 @@
+2025-09-19 00:15:23,013 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001523.log
+2025-09-19 00:15:23,013 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 00:15:23,037 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001523.log
+2025-09-19 00:15:23,040 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-19 00:15:23,049 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001523.log
+2025-09-19 00:15:23,050 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-19 00:15:31,368 - ImageRecognition - INFO - 圖像識別已設為可選，跳過圖像檔案檢查
+2025-09-19 00:15:36,455 - RetryHandler - INFO - 嘗試執行 專案 sample_project (第 1/3 次)
+2025-09-19 00:15:52,434 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:15:53,174 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:15:54,025 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:16:05,656 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 00:16:05,795 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 00:16:13,828 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 00:16:13,936 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 00:16:21,985 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 00:16:22,112 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 00:16:30,095 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 00:16:30,212 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 00:16:38,226 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-19 00:16:38,340 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-19 00:16:57,066 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:16:57,685 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:16:58,305 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:16:58,948 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到

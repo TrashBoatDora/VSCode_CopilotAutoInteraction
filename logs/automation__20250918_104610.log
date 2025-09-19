@@ -1,0 +1,99 @@
+2025-09-18 10:46:10,066 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,141 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,142 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 10:46:10,690 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,691 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-18 10:46:10,698 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,704 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {8096, 3140, 2792, 5960, 7724, 3376, 4784, 8944, 8412, 1396, 2068, 7032, 8700, 6424, 10192, 5020}
+2025-09-18 10:46:10,776 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,778 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 10:46:10,786 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,787 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 10:46:10,900 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,901 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 10:46:10,906 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,906 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 10:46:10,912 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,913 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-18 10:46:10,921 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,932 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,934 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 10:46:10,952 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,954 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {8096, 3140, 2792, 5960, 7724, 3376, 4784, 8944, 8412, 1396, 2068, 7032, 8700, 6424, 10192, 5020}
+2025-09-18 10:46:10,960 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,961 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 10:46:10,972 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,973 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 10:46:10,990 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,991 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 10:46:10,997 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:10,998 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 10:46:11,004 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104610.log
+2025-09-18 10:46:11,004 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-18 10:46:11,006 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-18 10:46:11,007 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-18 10:46:16,914 - MainController - INFO - 顯示多輪互動設定介面
+2025-09-18 10:46:25,415 - MainController - INFO - 本次執行的互動設定: {'interaction_enabled': True, 'max_rounds': 2, 'include_previous_response': False, 'round_delay': 2}
+2025-09-18 10:46:25,416 - MainController - INFO - 使用者選擇執行專案狀態重置
+2025-09-18 10:46:25,709 - MainController - INFO - 使用者選擇啟用智能等待功能
+2025-09-18 10:46:25,710 - MainController - INFO - 執行前置檢查...
+2025-09-18 10:46:25,718 - ImageRecognition - INFO - 圖像識別已設為可選，跳過圖像檔案檢查
+2025-09-18 10:46:25,719 - VSCodeController - INFO - 確保乾淨的執行環境...
+2025-09-18 10:46:25,720 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-18 10:46:30,725 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-18 10:46:30,727 - MainController - INFO - ✅ 前置檢查完成
+2025-09-18 10:46:30,727 - ProjectManager - INFO - 開始掃描專案目錄...
+2025-09-18 10:46:30,747 - ProjectManager - INFO - 掃描完成，發現 1 個專案
+2025-09-18 10:46:30,748 - MainController - INFO - 總共發現 1 個專案
+2025-09-18 10:46:30,749 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-18 10:46:30,750 - MainController - INFO - 待處理專案: 1 個
+2025-09-18 10:46:30,751 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-18 10:46:30,751 - ProjectManager - INFO - 找到 1 個待處理專案
+2025-09-18 10:46:30,753 - MainController - INFO - 開始處理 1 個專案
+2025-09-18 10:46:30,754 - MainController - INFO - 處理專案 1/1: sample_project
+2025-09-18 10:46:30,771 - HybridUIAutomation - INFO - 🚀 開始處理專案: sample_project
+2025-09-18 10:46:30,779 - HybridUIAutomation - INFO - [sample_project] 開始處理專案
+2025-09-18 10:46:30,788 - RetryHandler - INFO - 嘗試執行 專案 sample_project (第 1/3 次)
+2025-09-18 10:46:30,789 - HybridUIAutomation - INFO - [sample_project] 開啟 VS Code 專案
+2025-09-18 10:46:30,793 - VSCodeController - INFO - 開啟專案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects\sample_project
+2025-09-18 10:46:30,795 - VSCodeController - INFO - 發現現有 VS Code 實例，正在關閉...
+2025-09-18 10:46:30,796 - VSCodeController - INFO - 關閉自動開啟的 VS Code 實例...
+2025-09-18 10:46:35,812 - VSCodeController - INFO - ✅ 自動開啟的 VS Code 實例已關閉
+2025-09-18 10:46:35,963 - VSCodeController - INFO - 等待 VS Code 啟動...
+2025-09-18 10:46:40,966 - VSCodeController - INFO - ✅ VS Code 啟動成功 (第 1 次檢查)
+2025-09-18 10:46:42,971 - VSCodeController - INFO - 正在最大化視窗...
+2025-09-18 10:46:42,972 - VSCodeController - INFO - 正在最大化 VS Code 視窗...
+2025-09-18 10:46:44,205 - VSCodeController - INFO - ✅ 視窗最大化完成
+2025-09-18 10:46:44,213 - HybridUIAutomation - INFO - [sample_project] 清除 Copilot Chat 記憶
+2025-09-18 10:46:44,215 - VSCodeController - INFO - 開始清除 Copilot Chat 記憶...
+2025-09-18 10:46:48,045 - VSCodeController - INFO - ✅ Copilot Chat 記憶已清除
+2025-09-18 10:46:48,047 - HybridUIAutomation - INFO - [sample_project] 處理 Copilot Chat (啟用反覆互動功能，最大輪數: 2)
+2025-09-18 10:46:57,633 - ImageRecognition - INFO - 🔍✅ 圖像識別: stop_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:46:57,816 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-18 10:47:06,200 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:47:06,607 - ImageRecognition - INFO - 🔍❌ 圖像識別: send_button.png - 未找到
+2025-09-18 10:47:06,668 - ImageRecognition - WARNING - ⚠️ 同時檢測不到 stop 或 send 按鈕，執行通知清除
+2025-09-18 10:47:06,751 - ImageRecognition - INFO - 檢測到 UI 按鈕被通知遮擋，嘗試清除 VS Code 通知...
+2025-09-18 10:47:11,962 - ImageRecognition - INFO - ✅ VS Code 通知清除命令已執行
+2025-09-18 10:47:13,637 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:47:13,907 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:47:30,210 - VSCodeController - INFO - 開始清除 Copilot Chat 記憶...
+2025-09-18 10:47:34,033 - VSCodeController - INFO - ✅ Copilot Chat 記憶已清除
+2025-09-18 10:47:44,485 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:47:44,619 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:47:59,055 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:47:59,184 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:48:13,550 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:48:13,705 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:48:28,090 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:48:28,403 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:48:42,833 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:48:42,972 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:48:57,346 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:48:57,456 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:49:11,840 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:49:11,962 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:49:26,314 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:49:26,437 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)
+2025-09-18 10:49:40,828 - ImageRecognition - INFO - 🔍❌ 圖像識別: stop_button.png - 未找到
+2025-09-18 10:49:40,943 - ImageRecognition - INFO - 🔍✅ 圖像識別: send_button.png - 找到 (信心度: 0.90)

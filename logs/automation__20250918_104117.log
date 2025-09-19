@@ -1,0 +1,34 @@
+2025-09-18 10:41:17,561 - VSCodeUIInitializer - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,562 - VSCodeUIInitializer - INFO - VS Code UI 初始化器啟動
+2025-09-18 10:41:17,569 - VSCodeController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,574 - VSCodeController - INFO - VS Code 控制器初始化完成，已記錄現有 VS Code PID: {2068, 6424, 5020, 8096, 2296, 7724, 3376, 4784, 11068, 3140, 5960, 10192, 9304, 8412, 1756, 2792, 8944, 1396, 7032, 8700}
+2025-09-18 10:41:17,739 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,745 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-18 10:41:17,816 - CopilotHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,820 - CopilotHandler - INFO - Copilot Chat 處理器初始化完成
+2025-09-18 10:41:17,963 - ErrorHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,964 - ErrorHandler - INFO - 錯誤處理器初始化完成
+2025-09-18 10:41:17,969 - RetryHandler - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,969 - RetryHandler - INFO - 重試處理器初始化完成
+2025-09-18 10:41:17,975 - RecoveryManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,975 - RecoveryManager - INFO - 恢復管理器初始化完成
+2025-09-18 10:41:17,981 - MainController - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:17,999 - ProjectManager - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250918_104117.log
+2025-09-18 10:41:18,002 - ProjectManager - INFO - 專案管理器初始化 - 根目錄: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\projects
+2025-09-18 10:41:18,110 - MainController - INFO - 混合式 UI 自動化腳本初始化完成
+2025-09-18 10:41:18,111 - MainController - INFO - ========================= 開始執行自動化腳本 ========================
+2025-09-18 10:41:30,014 - MainController - INFO - 顯示多輪互動設定介面
+2025-09-18 10:41:34,598 - MainController - INFO - 本次執行的互動設定: {'interaction_enabled': True, 'max_rounds': 2, 'include_previous_response': False, 'round_delay': 2}
+2025-09-18 10:41:34,599 - MainController - INFO - 使用者選擇執行專案狀態重置
+2025-09-18 10:41:34,885 - MainController - INFO - 使用者選擇啟用智能等待功能
+2025-09-18 10:41:34,886 - MainController - INFO - 執行前置檢查...
+2025-09-18 10:41:39,913 - MainController - INFO - ✅ 前置檢查完成
+2025-09-18 10:41:39,914 - ProjectManager - INFO - 開始掃描專案目錄...
+2025-09-18 10:41:39,976 - ProjectManager - INFO - 掃描完成，發現 1 個專案
+2025-09-18 10:41:39,978 - MainController - INFO - 總共發現 1 個專案
+2025-09-18 10:41:39,980 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-18 10:41:39,980 - MainController - INFO - 待處理專案: 1 個
+2025-09-18 10:41:39,982 - ProjectManager - INFO - 待處理專案數量: 1
+2025-09-18 10:41:39,983 - ProjectManager - INFO - 找到 1 個待處理專案
+2025-09-18 10:41:39,983 - MainController - INFO - 開始處理 1 個專案
+2025-09-18 10:41:39,984 - MainController - INFO - 處理專案 1/1: sample_project

@@ -1,0 +1,13 @@
+2025-09-19 00:13:23,112 - HybridUIAutomation - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001323.log
+2025-09-19 00:13:23,123 - ImageRecognition - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001323.log
+2025-09-19 00:13:23,124 - ImageRecognition - INFO - 圖像辨識模組初始化完成
+2025-09-19 00:13:23,133 - TestNewChatSave - INFO - 日誌系統初始化完成 - 檔案: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\logs\automation__20250919_001323.log
+2025-09-19 00:13:23,134 - TestNewChatSave - INFO - 開始測試 NewChat_Save 對話框檢測功能...
+2025-09-19 00:13:23,136 - TestNewChatSave - INFO - NewChat_Save 圖像路徑: Y:\New_VSCode_Hybrid UI Automation Script\VSCode_CopilotAutoInteraction\assets\NewChat_Save.png
+2025-09-19 00:13:23,139 - TestNewChatSave - INFO - 圖像檔案是否存在: True
+2025-09-19 00:13:23,143 - TestNewChatSave - INFO - 測試檢測功能（2秒超時）...
+2025-09-19 00:13:23,365 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:13:23,991 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:13:24,632 - ImageRecognition - INFO - 🔍❌ 圖像識別: NewChat_Save.png - 未找到
+2025-09-19 00:13:25,161 - TestNewChatSave - INFO - ℹ️ 未檢測到 NewChat_Save 對話框（這是正常的，因為目前沒有顯示）
+2025-09-19 00:13:25,162 - TestNewChatSave - INFO - 測試完成

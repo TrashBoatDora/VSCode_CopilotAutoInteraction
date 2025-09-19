@@ -625,7 +625,7 @@ class VSCodeController:
     
     def clear_copilot_memory(self) -> bool:
         """
-        清除 Copilot Chat 記憶
+        清除 Copilot Chat 記憶，包含智能檢測和處理保存對話提示
         
         Returns:
             bool: 清除是否成功
@@ -633,8 +633,11 @@ class VSCodeController:
         try:
             self.logger.info("開始清除 Copilot Chat 記憶...")
             
+            # 導入圖像識別模組
+            from src.image_recognition import check_newchat_save_dialog, handle_newchat_save_dialog
+            
             # 執行清除記憶命令序列
-            for command in config.COPILOT_CLEAR_MEMORY_COMMANDS:
+            for i, command in enumerate(config.COPILOT_CLEAR_MEMORY_COMMANDS):
                 if command['type'] == 'hotkey':
                     pyautogui.hotkey(*command['keys'])
                     self.logger.debug(f"執行快捷鍵: {'+'.join(command['keys'])}")
@@ -642,9 +645,25 @@ class VSCodeController:
                     pyautogui.press(command['key'])
                     self.logger.debug(f"按下按鍵: {command['key']}")
                 
+                # 在執行 Ctrl+L (清除對話歷史) 命令後，檢查是否出現保存對話提示
+                if (command['type'] == 'hotkey' and 
+                    'ctrl' in command['keys'] and 'l' in command['keys']):
+                    
+                    self.logger.info("執行清除命令後，檢查是否出現保存對話提示...")
+                    
+                    # 檢查是否出現 NewChat_Save 對話框（等待2秒）
+                    if check_newchat_save_dialog(timeout=2):
+                        self.logger.info("檢測到保存對話提示，按下 Enter 保留並繼續")
+                        if handle_newchat_save_dialog():
+                            self.logger.info("✅ 成功處理保存對話提示，保留 Copilot 的代碼修改")
+                        else:
+                            self.logger.warning("⚠️ 處理保存對話提示時發生問題")
+                    else:
+                        self.logger.debug("未檢測到保存對話提示，繼續正常流程")
+                
                 time.sleep(command['delay'])
             
-            self.logger.info("✅ Copilot Chat 記憶已清除")
+            self.logger.info("✅ Copilot Chat 記憶清除流程完成")
             return True
             
         except Exception as e:

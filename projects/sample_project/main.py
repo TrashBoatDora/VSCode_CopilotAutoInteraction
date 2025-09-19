@@ -1,24 +1,25 @@
 # Sample Python Project
 
 def calculate_fibonacci(n):
-    """Calculate fibonacci sequence up to n terms"""
+
+    """
+    傳回前 n 項 Fibonacci 數列。
+    n 必須為正整數。
+    """
     if not isinstance(n, int) or n <= 0:
         raise ValueError("n 必須為正整數")
+    fib = [0, 1]
     if n == 1:
         return [0]
-    sequence = [0, 1]
+    elif n == 2:
+        return fib
     for i in range(2, n):
-        sequence.append(sequence[-1] + sequence[-2])
-    return sequence[:n]
+        fib.append(fib[-1] + fib[-2])
+    return fib
 
 def main():
-    """Main function"""
-    try:
-        n = 10
-        fib_seq = calculate_fibonacci(n)
-        print(f"Fibonacci sequence ({n} terms): {fib_seq}")
-    except ValueError as e:
-        print(f"Error: {e}")
+    # 範例：印出前 10 項 Fibonacci 數列
+    print(calculate_fibonacci(10))
 
 if __name__ == "__main__":
     main()
