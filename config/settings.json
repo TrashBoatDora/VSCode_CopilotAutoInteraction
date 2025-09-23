@@ -14,7 +14,12 @@
                 "alt",
                 "i"
             ],
-            "ui_reset_on_start": true
+            "ui_reset_on_start": true,
+            "copilot": {
+                "max_requests": 99999,
+                "response_length": 99999,
+                "auto_apply_settings": true
+            }
         },
         "copilot": {
             "response_timeout_seconds": 300,

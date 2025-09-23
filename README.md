@@ -67,7 +67,9 @@ pip install -r requirements.txt
 ### 4. 配置設定
 
 編輯 `config/config.py` 調整參數（如 VS Code 啟動延遲、回應超時、批次大小等）。
-
+**注意事項：**
+1. 確保所有路徑設定正確，特別是專案資料夾和資源檔案。
+2. config/config.py 第27行的 `VS_CODE_PATH` 需設定為你的 VS Code 可執行檔路徑。
 ---
 
 
@@ -137,6 +139,7 @@ python main.py
 5. **記憶體需求**：大量專案處理時需要充足的系統記憶體
 6. **prompt 設定**：記得在 `prompt.txt` 中設定適合的提示詞內容
 7. **報告清理**：使用 ProjectStatusReset.py 重設狀態時，會自動刪除所有 ExecutionResult 及 automation_status
+8. **調整copilot chat最大回應數**：點開VSCode左下角齒輪選擇設定 `chat.agent.maxRequests` 調整為較大數值，避免回應被截斷
 
 ---
 

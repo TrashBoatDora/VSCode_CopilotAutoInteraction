@@ -1,0 +1,15 @@
+{
+    "chat.agent.maxRequests": 99999,
+    "copilot.editor.enableAutoCompletions": true,
+    "copilot.enable": {
+        "*": true,
+        "yaml": false,
+        "plaintext": false,
+        "markdown": false
+    },
+    "github.copilot.advanced": {
+        "length": 99999
+    },
+    "github.copilot.editor.enableCodeActions": true,
+    "github.copilot.chat.welcomeMessage": "never"
+}

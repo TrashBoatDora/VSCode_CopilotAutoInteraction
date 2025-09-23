@@ -340,19 +340,19 @@ class CopilotHandler:
         Returns:
             bool: 回應是否基本完整
         """
-        # 基本長度檢查（降低要求）
-        if not response or len(response.strip()) < 10:
-            return False
+        # # 基本長度檢查（降低要求）
+        # if not response or len(response.strip()) < 3:
+        #     return False
             
-        # 只檢查最明顯的未完成標記
-        if '```' in response and response.count('```') % 2 != 0:
-            return False  # 未閉合的程式碼區塊
+        # # 只檢查最明顯的未完成標記
+        # if '```' in response and response.count('```') % 2 != 0:
+        #     return False  # 未閉合的程式碼區塊
         
-        # 簡單的截斷檢查
-        if response.rstrip().endswith(('...', '。。。')):
-            return False
+        # # 簡單的截斷檢查
+        # if response.rstrip().endswith(('...', '。。。')):
+        #     return False
                 
-        return True
+        return True # 移除完整性檢查
     
     def _try_copy_response_without_logging(self) -> str:
         """
