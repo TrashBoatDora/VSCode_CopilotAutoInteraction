@@ -23,6 +23,10 @@ class Config:
     PROMPT1_FILE_PATH = PROMPTS_DIR / "prompt1.txt"  # 第一輪互動使用
     PROMPT2_FILE_PATH = PROMPTS_DIR / "prompt2.txt"  # 第二輪以後互動使用
     
+    # 新增：專案專用提示詞模式設定
+    PROMPT_SOURCE_MODE = "global"  # "global" 或 "project"
+    PROJECT_PROMPT_FILENAME = "prompt.txt"  # 專案目錄下的提示詞檔名
+    
     # VS Code 相關設定
     VSCODE_EXECUTABLE = r"C:\Users\C250\AppData\Local\Programs\Microsoft VS Code\Code.exe"  # VS Code 可執行檔路徑
     VSCODE_STARTUP_DELAY = 5   # VS Code 啟動等待時間（秒）
@@ -150,12 +154,92 @@ class Config:
         return prompt1_exists, prompt2_exists
     
     @classmethod
-    def get_prompt_file_path(cls, round_number: int = 1):
-        """根據輪數取得對應的提示詞檔案路徑"""
-        if round_number == 1:
-            return cls.PROMPT1_FILE_PATH
+    def get_prompt_file_path(cls, round_number: int = 1, project_path: str = None):
+        """
+        根據輪數和專案路徑取得對應的提示詞檔案路徑
+        
+        Args:
+            round_number: 互動輪數
+            project_path: 專案路徑（專案模式時使用）
+            
+        Returns:
+            Path: 提示詞檔案路徑
+        """
+        if cls.PROMPT_SOURCE_MODE == "project" and project_path:
+            # 專案專用提示詞模式：返回專案目錄下的 prompt.txt
+            project_dir = Path(project_path)
+            return project_dir / cls.PROJECT_PROMPT_FILENAME
         else:
-            return cls.PROMPT2_FILE_PATH
+            # 全域提示詞模式：根據輪數返回對應檔案
+            if round_number == 1:
+                return cls.PROMPT1_FILE_PATH
+            else:
+                return cls.PROMPT2_FILE_PATH
+    
+    @classmethod
+    def get_project_prompt_path(cls, project_path: str):
+        """
+        取得專案專用提示詞檔案路徑
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            Path: 專案提示詞檔案路徑
+        """
+        project_dir = Path(project_path)
+        return project_dir / cls.PROJECT_PROMPT_FILENAME
+    
+    @classmethod
+    def validate_project_prompt_file(cls, project_path: str):
+        """
+        驗證專案專用提示詞檔案是否存在
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            bool: 檔案是否存在
+        """
+        prompt_path = cls.get_project_prompt_path(project_path)
+        return prompt_path.exists()
+    
+    @classmethod
+    def load_project_prompt_lines(cls, project_path: str):
+        """
+        載入專案專用提示詞的所有行
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            List[str]: 提示詞行列表，失敗時返回空列表
+        """
+        try:
+            prompt_path = cls.get_project_prompt_path(project_path)
+            if not prompt_path.exists():
+                return []
+            
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                lines = [line.strip() for line in f.readlines() if line.strip()]
+            
+            return lines
+        except Exception:
+            return []
+    
+    @classmethod
+    def count_project_prompt_lines(cls, project_path: str):
+        """
+        計算專案專用提示詞的行數
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            int: 提示詞行數，失敗時返回0
+        """
+        lines = cls.load_project_prompt_lines(project_path)
+        return len(lines)
 
 # 單例配置實例
 config = Config()

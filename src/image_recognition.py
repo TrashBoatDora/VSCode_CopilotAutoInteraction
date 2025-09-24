@@ -14,8 +14,18 @@ import sys
 
 # 導入配置和日誌
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
-from src.logger import get_logger
+try:
+    from config.config import config
+    from src.logger import get_logger
+except ImportError:
+    try:
+        from config import config
+        from logger import get_logger
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
+        from logger import get_logger
 
 class ImageRecognition:
     """圖像辨識處理器"""

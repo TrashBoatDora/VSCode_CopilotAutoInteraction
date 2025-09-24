@@ -12,7 +12,15 @@ from pathlib import Path
 
 # 設定模組搜尋路徑
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
+try:
+    from config.config import config
+except ImportError:
+    try:
+        from config import config
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
 
 class InteractionSettingsUI:
     """多輪互動設定介面"""
@@ -20,8 +28,8 @@ class InteractionSettingsUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Copilot Chat 多輪互動設定")
-        self.root.geometry("650x650")  # 增大視窗尺寸以容納新功能
-        self.root.resizable(False, False)
+        self.root.geometry("500x650")  # 調整視窗高度
+        self.root.resizable(True, True)  # 允許調整大小
         
         # 設定關閉事件處理
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -36,7 +44,11 @@ class InteractionSettingsUI:
     def load_settings(self):
         """載入設定檔案"""
         # 導入設定管理器
-        from src.settings_manager import settings_manager
+        try:
+            from src.settings_manager import settings_manager
+        except ImportError:
+            # 如果從 src 目錄內執行，直接導入
+            from settings_manager import settings_manager
         
         interaction_settings = settings_manager.get_interaction_settings()
         
@@ -46,14 +58,93 @@ class InteractionSettingsUI:
             "max_rounds": interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS),
             "include_previous_response": interaction_settings.get("include_previous_response", config.INTERACTION_INCLUDE_PREVIOUS_RESPONSE),
             "round_delay": interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY),
-            "copilot_chat_modification_action": interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION)
+            "copilot_chat_modification_action": interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION),
+            "prompt_source_mode": interaction_settings.get("prompt_source_mode", config.PROMPT_SOURCE_MODE)  # 新增：提示詞來源模式
         }
+    
+    def create_scrollable_frame(self):
+        """創建可滾動的框架"""
+        # 創建 Canvas 和 Scrollbar
+        self.canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        
+        # 設定 Canvas 滾動
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+        
+        # 在 Canvas 中創建視窗
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        
+        # 配置滾輪綁定
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # 綁定滾輪事件
+        self.bind_mousewheel()
+        
+        # 配置 Canvas 尺寸調整
+        self.canvas.bind('<Configure>', self.on_canvas_configure)
+        
+        # 放置 Canvas 和 Scrollbar（留出底部按鈕空間）
+        self.canvas.pack(side="left", fill="both", expand=True, padx=(20, 0), pady=(10, 20))
+        self.scrollbar.pack(side="right", fill="y", padx=(0, 20), pady=(10, 20))
+    
+    def on_canvas_configure(self, event):
+        """Canvas 尺寸改變時調整滾動區域"""
+        # 更新 scrollable_frame 的寬度以匹配 canvas 寬度
+        canvas_width = event.width
+        self.canvas.itemconfig(self.canvas_window, width=canvas_width)
+    
+    def bind_mousewheel(self):
+        """綁定滑鼠滾輪事件"""
+        # 為 Canvas 綁定滾輪事件
+        self.canvas.bind("<MouseWheel>", self.on_mousewheel)
+        self.scrollable_frame.bind("<MouseWheel>", self.on_mousewheel)
+        self.root.bind("<MouseWheel>", self.on_mousewheel)
+        
+        # 遞迴綁定所有子元件
+        self.bind_mousewheel_to_children(self.scrollable_frame)
+    
+    def bind_mousewheel_to_children(self, parent):
+        """遞迴為所有子元件綁定滾輪事件"""
+        for child in parent.winfo_children():
+            try:
+                child.bind("<MouseWheel>", self.on_mousewheel)
+                # 遞迴處理子元件的子元件
+                if hasattr(child, 'winfo_children'):
+                    self.bind_mousewheel_to_children(child)
+            except:
+                pass  # 某些元件可能不支援事件綁定
+    
+    def on_mousewheel(self, event):
+        """滑鼠滾輪事件處理"""
+        try:
+            # Windows 系統的滾輪事件處理
+            if event.delta:
+                delta = -1 * (event.delta / 120)
+            else:
+                # Linux/Mac 系統的滾輪事件處理
+                delta = -1 if event.num == 4 else 1
+            
+            # 執行滾動
+            self.canvas.yview_scroll(int(delta), "units")
+            
+            # 阻止事件繼續傳播
+            return "break"
+        except:
+            pass
     
     def save_settings(self):
         """儲存設定到檔案"""
         try:
             # 導入設定管理器
-            from src.settings_manager import settings_manager
+            try:
+                from src.settings_manager import settings_manager
+            except ImportError:
+                # 如果從 src 目錄內執行，直接導入
+                from settings_manager import settings_manager
             
             # 轉換為統一設定格式
             interaction_settings = {
@@ -62,7 +153,8 @@ class InteractionSettingsUI:
                 "include_previous_response": self.settings["include_previous_response"],
                 "round_delay": self.settings["round_delay"],
                 "show_ui_on_startup": True,
-                "copilot_chat_modification_action": self.settings["copilot_chat_modification_action"]
+                "copilot_chat_modification_action": self.settings["copilot_chat_modification_action"],
+                "prompt_source_mode": self.settings["prompt_source_mode"]  # 新增：提示詞來源模式
             }
             
             return settings_manager.update_interaction_settings(interaction_settings)
@@ -89,8 +181,14 @@ class InteractionSettingsUI:
         )
         subtitle_label.pack(pady=(0, 15))
         
-        # 主要設定框架
-        main_frame = ttk.Frame(self.root)
+        # 創建固定在底部的按鈕框架（先創建，確保在最底部）
+        self.create_bottom_buttons()
+        
+        # 創建可滾動的主容器（留出底部按鈕空間）
+        self.create_scrollable_frame()
+        
+        # 主要設定框架（放在可滾動容器內）
+        main_frame = ttk.Frame(self.scrollable_frame)
         main_frame.pack(padx=20, pady=10, fill="both", expand=True)
         
         # 啟用多輪互動
@@ -123,6 +221,55 @@ class InteractionSettingsUI:
             width=5
         )
         rounds_spinbox.pack(side="right")
+        
+        # 提示詞來源設定框架
+        prompt_source_frame = ttk.LabelFrame(main_frame, text="提示詞來源設定")
+        prompt_source_frame.pack(fill="x", pady=10)
+        
+        # 提示詞來源選項
+        prompt_source_option_frame = ttk.Frame(prompt_source_frame)
+        prompt_source_option_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(prompt_source_option_frame, text="選擇提示詞來源:").pack(anchor="w", pady=(5, 2))
+        
+        self.prompt_source_var = tk.StringVar(
+            value=self.settings["prompt_source_mode"]
+        )
+        
+        # 全域提示詞選項
+        global_prompt_radio = ttk.Radiobutton(
+            prompt_source_option_frame,
+            text="使用全域提示詞 (prompts/prompt1.txt & prompt2.txt)",
+            variable=self.prompt_source_var,
+            value="global",
+            command=self.on_prompt_source_changed
+        )
+        global_prompt_radio.pack(anchor="w", padx=20, pady=2)
+        
+        # 專案專用提示詞選項
+        project_prompt_radio = ttk.Radiobutton(
+            prompt_source_option_frame,
+            text="使用專案專用提示詞 (各專案目錄下的 prompt.txt)",
+            variable=self.prompt_source_var,
+            value="project",
+            command=self.on_prompt_source_changed
+        )
+        project_prompt_radio.pack(anchor="w", padx=20, pady=2)
+        
+        # 提示詞來源說明
+        self.prompt_source_explanation_text = tk.Text(
+            prompt_source_frame,
+            height=4,
+            width=60,
+            wrap="word",
+            state="disabled",
+            bg=self.root.cget("bg"),
+            font=("Arial", 9)
+        )
+        self.prompt_source_explanation_text.pack(padx=10, pady=5, fill="x")
+        
+        # 更新說明內容
+        self.update_prompt_source_explanation()
         
         # 回應串接設定框架
         chaining_frame = ttk.LabelFrame(main_frame, text="回應串接設定")
@@ -214,47 +361,49 @@ class InteractionSettingsUI:
         modification_explanation_text.insert("1.0", modification_explanation_content)
         modification_explanation_text.config(state="disabled")
         
-        # 按鈕框架
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill="x", pady=30)  # 增加 padding
+        # 初始狀態設定
+        self.on_interaction_enabled_changed()
         
-        # 重設按鈕
-        reset_button = ttk.Button(
-            button_frame,
-            text="重設為預設值",
-            command=self.reset_to_defaults,
-            width=15
-        )
-        reset_button.pack(side="left", padx=10)
+        # 更新滾輪綁定（在所有元件創建完成後）
+        self.root.after(100, self.bind_mousewheel)
+        
+        # 確保 Canvas 可以獲得焦點以響應滾輪事件
+        self.canvas.focus_set()
+    
+    def create_bottom_buttons(self):
+        """創建固定在底部的按鈕"""
+        # 按鈕框架（固定在主視窗底部）
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(side="bottom", fill="x", padx=20, pady=15)
+        
+        # 按鈕容器（居中排列）
+        buttons_container = ttk.Frame(button_frame)
+        buttons_container.pack(expand=True)
         
         # 取消按鈕
         cancel_button = ttk.Button(
-            button_frame,
+            buttons_container,
             text="取消",
-            command=self.on_close,  # 使用相同的關閉處理
-            width=10
+            command=self.on_close,
+            width=12
         )
-        cancel_button.pack(side="right", padx=10)
+        cancel_button.pack(side="left", padx=10)
         
-        # 儲存按鈕
+        # 確定按鈕
         save_button = ttk.Button(
-            button_frame,
+            buttons_container,
             text="確定執行",
             command=self.save_and_close,
             width=12
         )
-        save_button.pack(side="right", padx=5)
-        
-        # 初始狀態設定
-        self.on_interaction_enabled_changed()
+        save_button.pack(side="right", padx=10)
     
     def on_close(self):
         """處理視窗關閉事件"""
-        # 直接結束腳本，不再詢問
-        print("使用者關閉設定視窗，結束腳本執行")
+        # 標記為取消並關閉視窗
+        print("使用者關閉設定視窗")
         self.cancelled = True
         self.root.destroy()
-        sys.exit(0)  # 直接終止整個腳本
     
     def on_interaction_enabled_changed(self):
         """當啟用多輪互動選項改變時"""
@@ -276,14 +425,7 @@ class InteractionSettingsUI:
         for child in widget.winfo_children():
             self.set_widget_state(child, state)
     
-    def reset_to_defaults(self):
-        """重設為預設值"""
-        self.interaction_enabled_var.set(True)
-        self.max_rounds_var.set(3)
-        self.include_previous_var.set(True)
-        self.modification_action_var.set("keep")
-        self.on_interaction_enabled_changed()
-    
+
     def save_and_close(self):
         """更新設定並關閉視窗（不保存到檔案）"""
         # 更新設定
@@ -292,9 +434,102 @@ class InteractionSettingsUI:
         self.settings["include_previous_response"] = self.include_previous_var.get()
         self.settings["round_delay"] = config.INTERACTION_ROUND_DELAY  # 使用預設值
         self.settings["copilot_chat_modification_action"] = self.modification_action_var.get()
+        self.settings["prompt_source_mode"] = self.prompt_source_var.get()  # 新增：提示詞來源模式
+        
+        # 如果選擇專案模式，需要再次驗證所有專案都有提示詞
+        if self.settings["prompt_source_mode"] == "project":
+            try:
+                try:
+                    from src.project_manager import project_manager
+                except ImportError:
+                    from project_manager import project_manager
+                project_manager.scan_projects()
+                all_valid, missing_projects = project_manager.validate_projects_for_custom_prompts()
+                
+                if not all_valid:
+                    error_msg = f"無法使用專案專用提示詞模式！\n\n"
+                    error_msg += f"以下專案缺少 prompt.txt：\n"
+                    error_msg += "\n".join(f"• {project}" for project in missing_projects)
+                    error_msg += f"\n\n程式將中止執行。"
+                    
+                    messagebox.showerror("專案驗證失敗", error_msg)
+                    return  # 不關閉視窗，讓使用者重新選擇
+            except Exception as e:
+                messagebox.showerror("驗證錯誤", f"驗證專案時發生錯誤：\n{str(e)}")
+                return  # 不關閉視窗
         
         # 直接關閉視窗，開始執行腳本
         self.root.destroy()
+    
+    def on_prompt_source_changed(self):
+        """當提示詞來源選項改變時"""
+        self.update_prompt_source_explanation()
+        
+        # 如果選擇專案專用提示詞，需要驗證專案是否都有 prompt.txt
+        if self.prompt_source_var.get() == "project":
+            self.validate_project_prompts()
+    
+    def update_prompt_source_explanation(self):
+        """更新提示詞來源說明"""
+        mode = self.prompt_source_var.get()
+        
+        if mode == "global":
+            explanation = """全域提示詞模式：
+• 第1輪使用 prompts/prompt1.txt
+• 第2輪及後續使用 prompts/prompt2.txt
+• 所有專案使用相同的提示詞內容
+• 適合批次處理相同類型的分析任務"""
+        else:
+            explanation = """專案專用提示詞模式：
+• 每個專案使用各自目錄下的 prompt.txt
+• 每輪會逐行發送專案的 prompt.txt 內容
+• 如有專案缺少 prompt.txt，程式將中止運行
+• 適合需要個別化分析的專案"""
+        
+        self.prompt_source_explanation_text.config(state="normal")
+        self.prompt_source_explanation_text.delete("1.0", "end")
+        self.prompt_source_explanation_text.insert("1.0", explanation)
+        self.prompt_source_explanation_text.config(state="disabled")
+    
+    def validate_project_prompts(self):
+        """驗證專案是否都有 prompt.txt"""
+        try:
+            # 導入專案管理器
+            try:
+                from src.project_manager import project_manager
+            except ImportError:
+                from project_manager import project_manager
+            
+            # 掃描專案
+            project_manager.scan_projects()
+            
+            # 驗證提示詞
+            all_valid, missing_projects = project_manager.validate_projects_for_custom_prompts()
+            
+            if not all_valid:
+                error_msg = f"以下專案缺少 prompt.txt 檔案：\n"
+                error_msg += "\n".join(f"• {project}" for project in missing_projects)
+                error_msg += "\n\n請為這些專案新增 prompt.txt 或選擇全域提示詞模式。"
+                
+                messagebox.showerror("提示詞檔案缺失", error_msg)
+                
+                # 自動切回全域模式
+                self.prompt_source_var.set("global")
+                self.update_prompt_source_explanation()
+                
+            else:
+                # 顯示專案摘要資訊
+                summary = project_manager.get_project_prompt_summary()
+                info_msg = f"專案提示詞驗證通過！\n\n"
+                info_msg += f"📊 摘要統計：\n"
+                info_msg += f"• 總專案數：{summary['total_projects']}\n"
+                info_msg += f"• 有提示詞的專案：{summary['projects_with_prompts']}\n"
+                info_msg += f"• 總提示詞行數：{summary['total_prompt_lines']}\n"
+                
+                messagebox.showinfo("專案驗證結果", info_msg)
+        
+        except Exception as e:
+            messagebox.showerror("驗證錯誤", f"驗證專案提示詞時發生錯誤：\n{str(e)}")
     
     def run(self):
         """顯示設定介面"""

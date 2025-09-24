@@ -15,9 +15,21 @@ import sys
 
 # 導入配置和日誌
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
-from src.logger import get_logger
-from src.vscode_ui_initializer import initialize_vscode_ui
+try:
+    from config.config import config
+    from src.logger import get_logger
+    from src.vscode_ui_initializer import initialize_vscode_ui
+except ImportError:
+    try:
+        from config import config
+        from logger import get_logger
+        from vscode_ui_initializer import initialize_vscode_ui
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
+        from logger import get_logger
+        from vscode_ui_initializer import initialize_vscode_ui
 
 class VSCodeController:
     """VS Code 操作控制器"""
@@ -97,7 +109,10 @@ class VSCodeController:
             # 檢查是否處於多輪互動模式
             is_iteration_mode = False
             try:
-                from config.config import config
+                try:
+                    from config.config import config
+                except ImportError:
+                    from config import config
                 is_iteration_mode = config.INTERACTION_ENABLED and config.INTERACTION_MAX_ROUNDS > 1
                 self.logger.debug(f"多輪互動模式檢測: {is_iteration_mode} (啟用: {config.INTERACTION_ENABLED}, 最大輪數: {config.INTERACTION_MAX_ROUNDS})")
             except Exception as e:

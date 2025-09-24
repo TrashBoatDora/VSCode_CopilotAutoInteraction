@@ -12,8 +12,18 @@ from typing import List, Dict, Any
 
 # 導入配置和日誌
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
-from src.logger import get_logger
+try:
+    from config.config import config
+    from src.logger import get_logger
+except ImportError:
+    try:
+        from config import config
+        from logger import get_logger
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
+        from logger import get_logger
 
 # 設定 pyautogui 安全機制
 pyautogui.FAILSAFE = config.FAILSAFE_ENABLED

@@ -76,3 +76,6 @@ venv.bak/
 
 # Reports
 ExecutionResult/
+
+# testcase
+projects/

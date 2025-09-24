@@ -383,12 +383,15 @@ class HybridUIAutomationScript:
             project_name = Path(project.path).name
             project_result_dir = execution_result_dir / project_name
             
-            # 檢查多輪互動結果檔案
+            # 檢查多輪互動結果檔案（支援多種格式）
             has_success_file = (project_result_dir.exists() and 
-                              any(project_result_dir.glob("*_第*輪.md")))
+                              (any(project_result_dir.glob("*_第*輪.md")) or
+                               any(project_result_dir.glob("*_第*輪_第*行.md"))))
             
             # 調試信息
-            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, 多輪互動檔案: {has_success_file}")
+            has_files = len(list(project_result_dir.glob("*.md"))) if project_result_dir.exists() else 0
+            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, "
+                            f"檔案數量: {has_files}, 多輪互動檔案: {has_success_file}")
             
             if not has_success_file:
                 raise AutomationError("缺少成功執行結果檔案", ErrorType.PROJECT_ERROR)
@@ -444,10 +447,9 @@ class HybridUIAutomationScript:
                 else:
                     self.logger.warning("⚠️ 最後確認時未能獲取到有效回應，但仍嘗試關閉")
                     return self.vscode_controller.close_current_project(force=False)
-                
-                # 固定等待模式下需要進行額外檢查
+            
+            # 固定等待模式或非智能等待模式下需要進行額外檢查
             # 多輪互動模式需要更多的重試次數
-            is_iteration_mode = config.INTERACTION_ENABLED and config.INTERACTION_MAX_ROUNDS > 1
             max_attempts = 5 if is_iteration_mode else 3
             
             for attempt in range(max_attempts):
@@ -460,7 +462,9 @@ class HybridUIAutomationScript:
                 if response and len(response) > 50:
                     self.logger.info(f"✅ 獲取到回應內容 ({len(response)} 字元)")
                 else:
-                    self.logger.warning("⚠️ 未能獲取到有效回應內容")                # 等待一小段時間確認回應已完成
+                    self.logger.warning("⚠️ 未能獲取到有效回應內容")
+                
+                # 等待一小段時間確認回應已完成
                 # 多輪互動模式下使用漸進式等待時間
                 wait_time = 3 + (attempt * 2 if is_iteration_mode else 0)
                 self.logger.info(f"等待 {wait_time} 秒確保所有處理完成...")

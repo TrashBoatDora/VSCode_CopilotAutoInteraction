@@ -1,9 +1,9 @@
 {
-  "last_updated": "2025-09-23T00:45:23.588803",
+  "last_updated": "2025-09-24T06:14:49.088936",
   "projects": [
     {
-      "name": "real-projects",
-      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\real-projects",
+      "name": "real-project2",
+      "path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\real-project2",
       "status": "completed",
       "has_copilot_file": true,
       "file_count": 1183,
@@ -1192,10 +1192,14 @@
         "test\\testdata\\reload_plugins\\yt_dlp_plugins\\postprocessor\\normal.py",
         "test\\testdata\\plugin_packages\\testpackage\\yt_dlp_plugins\\extractor\\package.py"
       ],
-      "last_processed": "2025-09-23T00:45:23.588787",
+      "last_processed": "2025-09-24T06:14:49.088926",
       "error_message": null,
-      "processing_time": 151.9770450592041,
-      "retry_count": 0
+      "processing_time": 126.07858753204346,
+      "retry_count": 0,
+      "has_custom_prompt": true,
+      "prompt_lines_count": 1,
+      "prompt_file_size": 106,
+      "prompt_file_path": "Y:\\New_VSCode_Hybrid UI Automation Script\\VSCode_CopilotAutoInteraction\\projects\\real-project2\\prompt.txt"
     }
   ]
 }

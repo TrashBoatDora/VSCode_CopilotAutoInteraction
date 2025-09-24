@@ -10,14 +10,26 @@ import pyperclip
 import psutil
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import sys
 
 # 導入配置和日誌
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
-from src.logger import get_logger
-from src.image_recognition import image_recognition
+try:
+    from config.config import config
+except ImportError:
+    try:
+        from config import config
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
+try:
+    from src.logger import get_logger
+    from src.image_recognition import image_recognition
+except ImportError:
+    from logger import get_logger
+    from image_recognition import image_recognition
 
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
@@ -105,19 +117,20 @@ class CopilotHandler:
             self.logger.copilot_interaction("發送提示詞", "ERROR", str(e))
             return False
     
-    def _load_prompt_from_file(self, round_number: int = 1) -> Optional[str]:
+    def _load_prompt_from_file(self, round_number: int = 1, project_path: str = None) -> Optional[str]:
         """
         從 prompt 檔案讀取提示詞
         
         Args:
             round_number: 互動輪數，第1輪使用 prompt1.txt，第2輪以後使用 prompt2.txt
+            project_path: 專案路徑（專案模式時使用）
         
         Returns:
             Optional[str]: 提示詞內容，讀取失敗則返回 None
         """
         try:
-            # 根據輪數選擇對應的 prompt 檔案
-            prompt_file_path = config.get_prompt_file_path(round_number)
+            # 根據輪數和專案路徑選擇對應的 prompt 檔案
+            prompt_file_path = config.get_prompt_file_path(round_number, project_path)
             if not prompt_file_path.exists():
                 self.logger.error(f"提示詞檔案不存在: {prompt_file_path}")
                 return None
@@ -131,6 +144,67 @@ class CopilotHandler:
         except Exception as e:
             self.logger.error(f"讀取提示詞檔案失敗: {str(e)}")
             return None
+    
+    def load_project_prompt_lines(self, project_path: str) -> List[str]:
+        """
+        載入專案專用提示詞的所有行
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            List[str]: 提示詞行列表，失敗時返回空列表
+        """
+        try:
+            lines = config.load_project_prompt_lines(project_path)
+            self.logger.debug(f"載入專案 {Path(project_path).name} 的提示詞: {len(lines)} 行")
+            return lines
+        except Exception as e:
+            self.logger.error(f"載入專案提示詞失敗: {str(e)}")
+            return []
+    
+    def send_single_prompt_line(self, prompt_line: str, line_number: int, total_lines: int) -> bool:
+        """
+        發送單行提示詞到 Copilot Chat
+        
+        Args:
+            prompt_line: 單行提示詞內容
+            line_number: 行號（1開始）
+            total_lines: 總行數
+            
+        Returns:
+            bool: 發送是否成功
+        """
+        try:
+            self.logger.info(f"發送第 {line_number}/{total_lines} 行提示詞...")
+            self.logger.debug(f"內容: {prompt_line[:100]}...")
+            
+            # 將提示詞複製到剪貼簿
+            pyperclip.copy(prompt_line)
+            time.sleep(0.5)
+            
+            # 使用 Ctrl+Shift+I 聚焦到輸入框
+            pyautogui.hotkey('ctrl', 'shift', 'i')
+            time.sleep(1)
+            
+            # 清空現有內容並貼上提示詞
+            pyautogui.hotkey('ctrl', 'a')  # 全選
+            time.sleep(0.2)
+            pyautogui.hotkey('ctrl', 'v')  # 貼上
+            time.sleep(1)
+            
+            # 發送提示詞
+            pyautogui.press('enter')
+            time.sleep(1)
+            
+            self.is_chat_open = True
+            self.logger.copilot_interaction(f"發送第 {line_number} 行提示詞", "SUCCESS", 
+                                          f"長度: {len(prompt_line)} 字元")
+            return True
+            
+        except Exception as e:
+            self.logger.copilot_interaction(f"發送第 {line_number} 行提示詞", "ERROR", str(e))
+            return False
     
     def wait_for_response(self, timeout: int = None, use_smart_wait: bool = None) -> bool:
         """
@@ -508,7 +582,10 @@ class CopilotHandler:
             time.sleep(1)
             
             # 檢查是否還有 VS Code 進程在運行（只檢查自動開啟的）
-            from src.vscode_controller import vscode_controller
+            try:
+                from src.vscode_controller import vscode_controller
+            except ImportError:
+                from vscode_controller import vscode_controller
             
             still_running = []
             for proc in psutil.process_iter(['pid', 'name']):
@@ -560,15 +637,21 @@ class CopilotHandler:
             project_subdir = result_subdir / project_name
             project_subdir.mkdir(parents=True, exist_ok=True)
             
-            # 生成檔名（包含時間戳記和輪數，用於反覆互動的版本控制）
-            timestamp = time.strftime('%Y%m%d_%H%M')
+            # 生成檔名（包含時間戳記、輪數和行號，用於反覆互動的版本控制）
+            timestamp = time.strftime('%Y%m%d_%H%M%S')  # 增加秒數確保唯一性
             round_number = kwargs.get('round_number', 1)
-            output_file = project_subdir / f"{timestamp}_第{round_number}輪.md"
+            line_number = kwargs.get('line_number', None)  # 新增：行號參數
+            
+            if line_number is not None:
+                # 專案專用提示詞模式：按行記錄
+                output_file = project_subdir / f"{timestamp}_第{round_number}輪_第{line_number}行.md"
+            else:
+                # 全域提示詞模式：按輪記錄
+                output_file = project_subdir / f"{timestamp}_第{round_number}輪.md"
             
             self.logger.info(f"儲存回應到: {output_file}")
             
-            # 創建檔案並寫入內容
-            round_number = kwargs.get('round_number', 1)
+            # 創建檔案並寫入內容  
             prompt_text = kwargs.get('prompt_text', "使用預設提示詞")
             
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -577,11 +660,20 @@ class CopilotHandler:
                 f.write(f"# 專案: {project_name}\n")
                 f.write(f"# 專案路徑: {project_path}\n")
                 f.write(f"# 互動輪數: 第 {round_number} 輪\n")
+                
+                # 如果有行號資訊，添加行號
+                if line_number is not None:
+                    total_lines = kwargs.get('total_lines', '?')
+                    f.write(f"# 提示詞行號: 第 {line_number}/{total_lines} 行\n")
+                
                 f.write(f"# 執行狀態: {'成功' if is_success else '失敗'}\n")
                 f.write("=" * 50 + "\n\n")
                 
                 # 添加使用的提示詞
-                f.write("## 本輪提示詞\n\n")
+                if line_number is not None:
+                    f.write(f"## 第 {line_number} 行提示詞\n\n")
+                else:
+                    f.write("## 本輪提示詞\n\n")
                 f.write(prompt_text)
                 f.write("\n\n")
                 
@@ -597,6 +689,222 @@ class CopilotHandler:
             
         except Exception as e:
             self.logger.copilot_interaction("儲存回應", "ERROR", str(e))
+            return False
+    
+    def process_project_with_line_by_line(self, project_path: str, round_number: int = 1, 
+                                        use_smart_wait: bool = None) -> Tuple[bool, int, List[str]]:
+        """
+        使用專案專用提示詞模式處理專案（按行發送）
+        
+        Args:
+            project_path: 專案路徑
+            round_number: 當前互動輪數
+            use_smart_wait: 是否使用智能等待
+            
+        Returns:
+            Tuple[bool, int, List[str]]: (是否成功, 成功處理的行數, 失敗的行列表)
+        """
+        try:
+            project_name = Path(project_path).name
+            self.logger.create_separator(f"專案專用模式處理: {project_name} (第 {round_number} 輪)")
+            
+            # 載入專案提示詞行
+            prompt_lines = self.load_project_prompt_lines(project_path)
+            if not prompt_lines:
+                error_msg = f"專案 {project_name} 沒有可用的提示詞行"
+                self.logger.error(error_msg)
+                return False, 0, [error_msg]
+            
+            total_lines = len(prompt_lines)
+            self.logger.info(f"開始按行處理專案 {project_name}，共 {total_lines} 行提示詞")
+            
+            successful_lines = 0
+            failed_lines = []
+            
+            # 逐行處理
+            for line_num, prompt_line in enumerate(prompt_lines, 1):
+                try:
+                    self.logger.info(f"處理第 {line_num}/{total_lines} 行...")
+                    
+                    # 步驟1: 開啟 Copilot Chat
+                    if not self.open_copilot_chat():
+                        error_msg = f"第 {line_num} 行：無法開啟 Copilot Chat"
+                        failed_lines.append(error_msg)
+                        self.logger.error(error_msg)
+                        continue
+                    
+                    # 步驟2: 發送單行提示詞
+                    if not self.send_single_prompt_line(prompt_line, line_num, total_lines):
+                        error_msg = f"第 {line_num} 行：無法發送提示詞"
+                        failed_lines.append(error_msg)
+                        self.logger.error(error_msg)
+                        continue
+                    
+                    # 步驟3: 等待回應
+                    if not self.wait_for_response(use_smart_wait=use_smart_wait):
+                        error_msg = f"第 {line_num} 行：等待回應超時"
+                        failed_lines.append(error_msg)
+                        self.logger.error(error_msg)
+                        continue
+                    
+                    # 步驟4: 複製回應
+                    response = self.copy_response()
+                    if not response:
+                        error_msg = f"第 {line_num} 行：無法複製回應內容"
+                        failed_lines.append(error_msg)
+                        self.logger.error(error_msg)
+                        continue
+                    
+                    # 步驟5: 儲存到檔案（包含行號）
+                    if not self.save_response_to_file(
+                        project_path, 
+                        response, 
+                        is_success=True, 
+                        round_number=round_number,
+                        line_number=line_num,
+                        total_lines=total_lines,
+                        prompt_text=prompt_line
+                    ):
+                        error_msg = f"第 {line_num} 行：無法儲存回應到檔案"
+                        failed_lines.append(error_msg)
+                        self.logger.error(error_msg)
+                        continue
+                    
+                    successful_lines += 1
+                    self.logger.info(f"✅ 第 {line_num}/{total_lines} 行處理成功")
+                    
+                    # 行之間的短暫停頓
+                    time.sleep(1)
+                    
+                except Exception as e:
+                    error_msg = f"第 {line_num} 行處理失敗: {str(e)}"
+                    failed_lines.append(error_msg)
+                    self.logger.error(error_msg)
+            
+            # 處理完成
+            self.logger.create_separator(f"專案 {project_name} 第 {round_number} 輪處理完成")
+            self.logger.info(f"成功處理: {successful_lines}/{total_lines} 行")
+            if failed_lines:
+                self.logger.warning(f"失敗行數: {len(failed_lines)}")
+                for error in failed_lines[:5]:  # 只顯示前5個錯誤
+                    self.logger.warning(f"  • {error}")
+                if len(failed_lines) > 5:
+                    self.logger.warning(f"  ... 還有 {len(failed_lines) - 5} 個錯誤")
+            
+            return successful_lines > 0, successful_lines, failed_lines
+            
+        except Exception as e:
+            error_msg = f"專案專用模式處理失敗: {str(e)}"
+            self.logger.error(error_msg)
+            return False, 0, [error_msg]
+    
+    def _process_project_with_project_prompts(self, project_path: str, max_rounds: int = None, 
+                                            interaction_settings: dict = None) -> bool:
+        """
+        使用專案專用提示詞模式處理專案的多輪互動
+        
+        Args:
+            project_path: 專案路徑
+            max_rounds: 最大互動輪數
+            interaction_settings: 互動設定
+            
+        Returns:
+            bool: 處理是否成功
+        """
+        try:
+            # 導入config以確保作用域可訪問
+            try:
+                from config.config import config
+            except ImportError:
+                from config import config
+            
+            project_name = Path(project_path).name
+            
+            # 檢查是否啟用多輪互動
+            if not interaction_settings.get("interaction_enabled", True):
+                self.logger.info("多輪互動功能已停用，執行單輪專案專用處理")
+                success, successful_lines, failed_lines = self.process_project_with_line_by_line(
+                    project_path, round_number=1
+                )
+                return success
+            
+            # 使用設定中的參數
+            if max_rounds is None:
+                max_rounds = interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS)
+            
+            round_delay = interaction_settings.get("round_delay", config.INTERACTION_ROUND_DELAY)
+            
+            self.logger.create_separator(f"專案專用模式：開始處理專案 {project_name}，計劃互動 {max_rounds} 輪")
+            
+            # 檢查專案是否有提示詞
+            prompt_lines = self.load_project_prompt_lines(project_path)
+            if not prompt_lines:
+                self.logger.error(f"專案 {project_name} 沒有可用的提示詞檔案")
+                return False
+            
+            total_lines = len(prompt_lines)
+            self.logger.info(f"專案 {project_name} 有 {total_lines} 行提示詞，每輪將發送 {total_lines} 次")
+            
+            # 追蹤每一輪的成功狀態
+            overall_success = True
+            total_successful_lines = 0
+            total_failed_lines = []
+            
+            # 進行多輪互動
+            for round_num in range(1, max_rounds + 1):
+                self.logger.create_separator(f"專案專用模式：開始第 {round_num} 輪互動")
+                
+                if round_num > 1:
+                    # 清除 Copilot 記憶（每輪獨立）
+                    try:
+                        from src.vscode_controller import vscode_controller
+                    except ImportError:
+                        from vscode_controller import vscode_controller
+                    modification_action = interaction_settings.get(
+                        "copilot_chat_modification_action", 
+                        config.COPILOT_CHAT_MODIFICATION_ACTION
+                    )
+                    vscode_controller.clear_copilot_memory(modification_action)
+                    time.sleep(2)  # 等待記憶清除完成
+                
+                # 處理本輪的按行互動
+                success, successful_lines, failed_lines = self.process_project_with_line_by_line(
+                    project_path, round_number=round_num
+                )
+                
+                if success:
+                    total_successful_lines += successful_lines
+                    self.logger.info(f"✅ 第 {round_num} 輪互動成功：{successful_lines}/{total_lines} 行")
+                else:
+                    overall_success = False
+                    self.logger.error(f"❌ 第 {round_num} 輪互動失敗")
+                
+                total_failed_lines.extend(failed_lines)
+                
+                # 輪次間暫停
+                if round_num < max_rounds:
+                    self.logger.info(f"等待 {round_delay} 秒後進行下一輪...")
+                    time.sleep(round_delay)
+            
+            # 處理結束統計
+            expected_total = total_lines * max_rounds
+            success_rate = (total_successful_lines / expected_total * 100) if expected_total > 0 else 0
+            
+            self.logger.create_separator(f"專案 {project_name} 專案專用模式處理完成")
+            self.logger.info(f"總計成功處理: {total_successful_lines}/{expected_total} 行 ({success_rate:.1f}%)")
+            
+            if total_failed_lines:
+                self.logger.warning(f"總計失敗行數: {len(total_failed_lines)}")
+            
+            # 互動完成後的穩定期
+            cooldown_time = 3
+            self.logger.info(f"所有互動輪次完成，進入穩定期 {cooldown_time} 秒...")
+            time.sleep(cooldown_time)
+            
+            return overall_success and (total_successful_lines > 0)
+            
+        except Exception as e:
+            self.logger.error(f"專案專用模式處理失敗: {str(e)}")
             return False
     
     def process_project_complete(self, project_path: str, use_smart_wait: bool = None, 
@@ -675,8 +983,14 @@ class CopilotHandler:
         try:
             self.logger.info("清除 Copilot Chat 記錄...")
             # 使用控制器進行記憶清除，獲取設定參數
-            from src.vscode_controller import vscode_controller
-            from config.config import config
+            try:
+                from src.vscode_controller import vscode_controller
+            except ImportError:
+                from vscode_controller import vscode_controller
+            try:
+                from config.config import config
+            except ImportError:
+                from config import config
             
             # 獲取修改結果處理設定
             modification_action = config.COPILOT_CHAT_MODIFICATION_ACTION
@@ -829,6 +1143,12 @@ class CopilotHandler:
         Returns:
             dict: 互動設定字典
         """
+        # 導入config以確保作用域可訪問
+        try:
+            from config.config import config
+        except ImportError:
+            from config import config
+        
         # 優先使用外部設定（來自 UI）
         if self.interaction_settings is not None:
             self.logger.info(f"使用外部提供的互動設定: {self.interaction_settings}")
@@ -869,8 +1189,22 @@ class CopilotHandler:
             bool: 處理是否成功
         """
         try:
+            # 導入config以確保作用域可訪問
+            try:
+                from config.config import config
+            except ImportError:
+                from config import config
+            
             # 載入互動設定
             interaction_settings = self._load_interaction_settings()
+            
+            # 檢查提示詞來源模式
+            prompt_source_mode = interaction_settings.get("prompt_source_mode", config.PROMPT_SOURCE_MODE)
+            self.logger.info(f"提示詞來源模式: {prompt_source_mode}")
+            
+            # 如果是專案專用提示詞模式，使用按行處理
+            if prompt_source_mode == "project":
+                return self._process_project_with_project_prompts(project_path, max_rounds, interaction_settings)
             
             # 檢查是否啟用多輪互動
             if not interaction_settings["interaction_enabled"]:
@@ -931,8 +1265,14 @@ class CopilotHandler:
                 
                 if round_num > 1:
                     # 清除 Copilot 記憶（每輪獨立），使用正確的設定參數
-                    from src.vscode_controller import vscode_controller
-                    from config.config import config
+                    try:
+                        from src.vscode_controller import vscode_controller
+                    except ImportError:
+                        from vscode_controller import vscode_controller
+                    try:
+                        from config.config import config
+                    except ImportError:
+                        from config import config
                     
                     # 獲取修改結果處理設定
                     modification_action = config.COPILOT_CHAT_MODIFICATION_ACTION

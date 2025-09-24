@@ -12,7 +12,15 @@ from typing import Optional
 
 # 導入配置
 sys.path.append(str(Path(__file__).parent.parent))
-from config.config import config
+try:
+    from config.config import config
+except ImportError:
+    try:
+        from config import config
+    except ImportError:
+        import sys
+        sys.path.append(str(Path(__file__).parent.parent / "config"))
+        import config
 
 class AutomationLogger:
     """自動化腳本專用日誌記錄器"""

@@ -31,6 +31,12 @@ class ProjectInfo:
     processing_time: Optional[float] = None
     retry_count: int = 0
     
+    # 新增：專案專用提示詞相關欄位
+    has_custom_prompt: bool = False  # 是否有專案專用的 prompt.txt
+    prompt_lines_count: int = 0      # 專案提示詞的行數
+    prompt_file_size: int = 0        # 提示詞檔案大小（bytes）
+    prompt_file_path: Optional[str] = None  # 提示詞檔案路徑
+    
     def __post_init__(self):
         if self.supported_files is None:
             self.supported_files = []
@@ -131,6 +137,9 @@ class ProjectManager:
                         supported_files.append(str(file_path.relative_to(project_path)))
                     file_count += len(files)
             
+            # 分析專案專用提示詞
+            prompt_info = self._analyze_project_prompt(project_path)
+            
             # 檢查是否已有多輪互動處理結果（檢查統一的 ExecutionResult/Success 資料夾）
             script_root = Path(__file__).parent.parent  # 腳本根目錄
             execution_result_dir = script_root / "ExecutionResult" / "Success"
@@ -151,7 +160,12 @@ class ProjectManager:
                 has_copilot_file=has_copilot_file,
                 file_count=file_count,
                 supported_files=supported_files,
-                status="completed" if has_copilot_file else "pending"
+                status="completed" if has_copilot_file else "pending",
+                # 加入專案提示詞資訊
+                has_custom_prompt=prompt_info["has_custom_prompt"],
+                prompt_lines_count=prompt_info["prompt_lines_count"],
+                prompt_file_size=prompt_info["prompt_file_size"],
+                prompt_file_path=prompt_info["prompt_file_path"]
             )
             
             self.logger.debug(f"分析專案 {project_name}: {file_count} 個檔案, 狀態: {project_info.status}")
@@ -161,6 +175,53 @@ class ProjectManager:
         except Exception as e:
             self.logger.error(f"分析專案 {project_path} 時發生錯誤: {str(e)}")
             return None
+    
+    def _analyze_project_prompt(self, project_path: Path) -> Dict:
+        """
+        分析專案的提示詞檔案資訊
+        
+        Args:
+            project_path: 專案路徑
+            
+        Returns:
+            Dict: 包含提示詞資訊的字典
+        """
+        from config.config import config
+        
+        prompt_info = {
+            "has_custom_prompt": False,
+            "prompt_lines_count": 0,
+            "prompt_file_size": 0,
+            "prompt_file_path": None
+        }
+        
+        try:
+            # 取得專案提示詞檔案路徑
+            prompt_file_path = config.get_project_prompt_path(str(project_path))
+            
+            if prompt_file_path.exists():
+                prompt_info["has_custom_prompt"] = True
+                prompt_info["prompt_file_path"] = str(prompt_file_path)
+                prompt_info["prompt_file_size"] = prompt_file_path.stat().st_size
+                
+                # 計算提示詞行數
+                try:
+                    with open(prompt_file_path, 'r', encoding='utf-8') as f:
+                        lines = [line.strip() for line in f.readlines() if line.strip()]
+                    prompt_info["prompt_lines_count"] = len(lines)
+                    
+                    self.logger.debug(f"專案 {project_path.name} 提示詞分析: "
+                                    f"{len(lines)} 行, {prompt_info['prompt_file_size']} bytes")
+                except Exception as e:
+                    self.logger.warning(f"讀取專案 {project_path.name} 提示詞檔案失敗: {str(e)}")
+                    prompt_info["prompt_lines_count"] = 0
+            else:
+                self.logger.debug(f"專案 {project_path.name} 沒有專案專用提示詞檔案")
+        
+        except Exception as e:
+            self.logger.error(f"分析專案 {project_path.name} 提示詞時發生錯誤: {str(e)}")
+        
+        return prompt_info
     
     def get_pending_projects(self) -> List[ProjectInfo]:
         """
@@ -267,9 +328,14 @@ class ProjectManager:
             execution_result_dir = script_root / "ExecutionResult" / "Success"
             project_result_dir = execution_result_dir / project_name
             
-            # 只檢查多輪互動檔案格式
+            # 檢查多輪互動檔案格式（支援多種格式）
             has_success_file = (project_result_dir.exists() and 
-                              any(project_result_dir.glob("*_第*輪.md")))
+                              (any(project_result_dir.glob("*_第*輪.md")) or
+                               any(project_result_dir.glob("*_第*輪_第*行.md"))))
+            
+            has_files = len(list(project_result_dir.glob("*.md"))) if project_result_dir.exists() else 0
+            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, "
+                             f"檔案數量: {has_files}, 多輪互動檔案: {has_success_file}")
             
             if has_success_file:
                 project.has_copilot_file = True
@@ -447,6 +513,51 @@ class ProjectManager:
                 
         except Exception as e:
             self.logger.error(f"載入狀態檔案失敗: {str(e)}")
+    
+    def validate_projects_for_custom_prompts(self) -> Tuple[bool, List[str]]:
+        """
+        驗證所有專案是否都有 prompt.txt（當使用專案專用提示詞模式時）
+        
+        Returns:
+            Tuple[bool, List[str]]: (是否全部都有, 缺少 prompt.txt 的專案名稱列表)
+        """
+        missing_prompts = []
+        
+        for project in self.projects:
+            if not project.has_custom_prompt:
+                missing_prompts.append(project.name)
+        
+        all_have_prompts = len(missing_prompts) == 0
+        
+        self.logger.info(f"專案提示詞驗證結果 - 全部有效: {all_have_prompts}, "
+                        f"缺少提示詞的專案: {len(missing_prompts)}")
+        
+        return all_have_prompts, missing_prompts
+    
+    def get_projects_with_custom_prompts(self) -> List[ProjectInfo]:
+        """取得有專案專用提示詞的專案列表"""
+        projects_with_prompts = [p for p in self.projects if p.has_custom_prompt]
+        self.logger.info(f"有專案專用提示詞的專案數量: {len(projects_with_prompts)}")
+        return projects_with_prompts
+    
+    def get_project_prompt_summary(self) -> Dict:
+        """
+        取得專案提示詞摘要資訊
+        
+        Returns:
+            Dict: 包含統計資訊的字典
+        """
+        total_projects = len(self.projects)
+        projects_with_prompts = len([p for p in self.projects if p.has_custom_prompt])
+        total_prompt_lines = sum(p.prompt_lines_count for p in self.projects if p.has_custom_prompt)
+        
+        return {
+            "total_projects": total_projects,
+            "projects_with_prompts": projects_with_prompts,
+            "projects_without_prompts": total_projects - projects_with_prompts,
+            "total_prompt_lines": total_prompt_lines,
+            "average_lines_per_project": total_prompt_lines / max(1, projects_with_prompts)
+        }
 
 # 創建全域實例
 project_manager = ProjectManager()
