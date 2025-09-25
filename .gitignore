@@ -79,3 +79,15 @@ ExecutionResult/
 
 # testcase
 projects/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# projects
+projects/
+
+# prompts  
+prompts/
