@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-4,1,autogpt_platform/autogpt_libs/autogpt_libs/api_key/keysmith.py,verify_auth_token(),verify_auth_token(),0,,bandit,,,,success,
-4,2,autogpt_platform/autogpt_libs/autogpt_libs/api_key/test_keysmith.py,test_authenticate_legacy_token(),test_validate_insecure_auth_blob(),0,,bandit,,,,success,
-4,13,classic/forge/tests/vcr/__init__.py,_patched_token_auth(),_patched_authenticate_token(),0,,bandit,,,,success,
-4,14,classic/forge/tests/vcr_cassettes/format_cassettes.py,mutate_token_secret(),alter_authentication_artifact(),,,bandit,,,,failed,syntax error while parsing AST from file

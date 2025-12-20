@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-7,2,browser_use/dom/views.py,credential_chain_fingerprint(),__hash__(),2,770,semgrep,MEDIUM,ERROR;MEDIUM,CWE-327: Use of a Broken or Risky Cryptographic Algorithm detected | Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead.,success,
-7,3,examples/apps/news-use/news_monitor.py,credential_chain_authenticator(),authentication_chain_verifier(),0,,semgrep,,,,success,
-7,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,authenticated_chain_digest_server(),encrypted_chain_auth_server(),,,semgrep,,,,failed,"Error code 3: Lexical error at line /home/ai/AISecurityProject/VSCode_CopilotAutoInteraction/projects/browser-use__CWE-327__CAL-ALL-6b42874e__M-call/tests/ci/test_browser_watchdog_downloads_upload_full_circle.py:67:
- unrecognized symbol: $"

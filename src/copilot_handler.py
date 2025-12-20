@@ -42,7 +42,7 @@ except ImportError:
 
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
-    COMPLETION_INSTRUCTION = '[!Important!] You should write code on original file directly. And please do not use any terminal command or something else. Finally, Make sure to add “Response completed” on your reply\'s last line after finishing all works!'
+    COMPLETION_INSTRUCTION = ''
 
     def __init__(self, error_handler=None, interaction_settings=None, cwe_scan_manager=None, cwe_scan_settings=None):
         """
@@ -943,10 +943,22 @@ class CopilotHandler:
                         # 複製回應
                         response = self.copy_response()
                         if not response:
-                            error_msg = f"第 {line_num} 行：無法複製回應內容"
-                            failed_lines.append(error_msg)
-                            self.logger.error(error_msg)
-                            break
+                            # 複製失敗也應該重試，而不是直接跳過該行
+                            self.logger.warning(f"⚠️  第 {line_num} 行無法複製回應，將等待後重試")
+                            retry_count += 1
+                            
+                            # 使用與回應不完整相同的重試邏輯
+                            wait_and_retry(1800, line_num, round_number, self.logger, retry_count)
+                            
+                            # 清空輸入框準備重試
+                            pyautogui.hotkey('ctrl', 'f1')
+                            time.sleep(0.5)
+                            pyautogui.hotkey('ctrl', 'a')
+                            time.sleep(0.2)
+                            pyautogui.press('delete')
+                            time.sleep(0.5)
+                            
+                            continue  # 繼續重試循環
                         
                         # 檢查回應完整性
                         if is_response_incomplete(response):

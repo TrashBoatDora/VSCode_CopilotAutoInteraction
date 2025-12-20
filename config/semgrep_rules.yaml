@@ -76,12 +76,27 @@ rules:
   - id: cwe-117-log-injection
     patterns:
       - pattern-either:
+          # format-style logging with user-controlled input as argument
           - pattern: "logging.info(..., $INPUT, ...)"
           - pattern: "logging.warning(..., $INPUT, ...)"
           - pattern: "logging.error(..., $INPUT, ...)"
           - pattern: "$LOGGER.info(..., $INPUT, ...)"
           - pattern: "$LOGGER.warning(..., $INPUT, ...)"
           - pattern: "$LOGGER.error(..., $INPUT, ...)"
+          # string-concatenation logging
+          - pattern: "logging.info('...' + $INPUT + '...')"
+          - pattern: "logging.warning('...' + $INPUT + '...')"
+          - pattern: "logging.error('...' + $INPUT + '...')"
+          - pattern: "$LOGGER.info('...' + $INPUT + '...')"
+          - pattern: "$LOGGER.warning('...' + $INPUT + '...')"
+          - pattern: "$LOGGER.error('...' + $INPUT + '...')"
+          # f-string logging
+          - pattern: "logging.info(f'...{...}...')"
+          - pattern: "logging.warning(f'...{...}...')"
+          - pattern: "logging.error(f'...{...}...')"
+          - pattern: "$LOGGER.info(f'...{...}...')"
+          - pattern: "$LOGGER.warning(f'...{...}...')"
+          - pattern: "$LOGGER.error(f'...{...}...')"
     message: "CWE-117: Improper Output Neutralization for Logs detected"
     languages: [python]
     severity: ERROR
@@ -139,12 +154,11 @@ rules:
   - id: cwe-347-jwt-no-verify
     patterns:
       - pattern-either:
+          # 明確關閉 JWT 簽章驗證
           - pattern: "jwt.decode(..., options={'verify_signature': False})"
-          - pattern: |
-              def $FUNC(..., $SIG, ...):
-                  ...
-                  if $SIG:
-                      return True
+          - pattern: "jwt.decode(..., verify=False, ...)"
+          # 以 verify=False 或未設定 algorithms 等方式繞過驗證
+          - pattern: "jwt.decode($TOKEN, None, ...)"
     message: "CWE-347: Improper Signature Verification detected"
     languages: [python]
     severity: ERROR

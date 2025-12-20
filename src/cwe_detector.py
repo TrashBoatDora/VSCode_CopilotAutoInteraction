@@ -78,22 +78,22 @@ class CWEDetector:
     # 注意：所有規則必須使用 r/ 前綴（registry rules）或 p/ 前綴（rulesets）
     # 規則已通過 validate_semgrep_rules.py 驗證（Python 專案）
     SEMGREP_BY_CWE = {
-        "022": "config/semgrep_rules.yaml",  # Path Traversal
-        "078": "config/semgrep_rules.yaml",  # OS Command Injection
+        "022": "config/semgrep_rules.yaml,r/python.lang.security.audit.path-traversal.path-traversal-join,r/python.lang.security.audit.path-traversal.path-traversal-open",  # Path Traversal
+        "078": "config/semgrep_rules.yaml,r/python.lang.security.audit.subprocess-shell-true.subprocess-shell-true,r/python.lang.security.audit.os-system.os-system,r/python.lang.security.audit.os-popen.os-popen",  # OS Command Injection
         "079": "config/semgrep_rules.yaml,r/python.flask.security.audit.directly-returned-format-string.directly-returned-format-string,r/python.django.security.injection.raw-html-format.raw-html-format",  # XSS
         "095": "config/semgrep_rules.yaml,r/python.lang.security.audit.eval-detected.eval-detected",  # Code Injection (eval)
         "113": "config/semgrep_rules.yaml",  # HTTP Response Splitting
         "117": "config/semgrep_rules.yaml",  # Log Injection
         "326": "config/semgrep_rules.yaml,r/python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",  # Weak Encryption (RSA)
         "327": "config/semgrep_rules.yaml,r/python.lang.security.insecure-hash-algorithms-md5.insecure-hash-algorithm-md5",  # Broken Cryptography (MD5)
-        "329": "config/semgrep_rules.yaml",  # Insecure Cipher Mode (ECB)
-        "347": "config/semgrep_rules.yaml",  # JWT None Algorithm
-        "377": "config/semgrep_rules.yaml",  # Insecure Temporary File
+        "329": "config/semgrep_rules.yaml,r/python.cryptography.security.insecure-cipher-modes.insecure-cipher-modes",  # Insecure Cipher Mode (ECB)
+        "347": "config/semgrep_rules.yaml,r/python.jwt.security.jwt-none-alg.jwt-none-alg",  # JWT None Algorithm
+        "377": "config/semgrep_rules.yaml,r/python.lang.security.audit.tempfile.mktemp-usage",  # Insecure Temporary File
         "502": "config/semgrep_rules.yaml,r/python.lang.security.deserialization.pickle.avoid-pickle",  # Deserialization (Pickle)
-        "643": "config/semgrep_rules.yaml",  # XPath Injection
+        "643": "config/semgrep_rules.yaml,r/python.lang.security.audit.lxml.xpath-injection",  # XPath Injection
         "760": "config/semgrep_rules.yaml",  # Predictable Salt
         "918": "config/semgrep_rules.yaml,r/python.flask.security.injection.ssrf-requests.ssrf-requests,r/python.django.security.injection.ssrf.ssrf-injection-requests.ssrf-injection-requests",  # SSRF
-        "943": "config/semgrep_rules.yaml",  # SQL Injection
+        "943": "config/semgrep_rules.yaml,r/python.sqlalchemy.security.sqlalchemy-sql-injection.sqlalchemy-sql-injection,r/python.django.security.injection.sql.sql-injection,r/python.lang.security.audit.sqli.sql-injection-user-input",  # SQL Injection
         "1333": "config/semgrep_rules.yaml",  # ReDoS
     }
     

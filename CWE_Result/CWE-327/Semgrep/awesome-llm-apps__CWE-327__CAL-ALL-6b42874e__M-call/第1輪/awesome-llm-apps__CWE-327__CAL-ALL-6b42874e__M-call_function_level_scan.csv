@@ -1,2 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-1,1,advanced_ai_agents/multi_agent_apps/ai_news_and_podcast_agents/beifong/utils/rss_feed_parser.py,get_hash(),get_hash(),0,,semgrep,,,,success,

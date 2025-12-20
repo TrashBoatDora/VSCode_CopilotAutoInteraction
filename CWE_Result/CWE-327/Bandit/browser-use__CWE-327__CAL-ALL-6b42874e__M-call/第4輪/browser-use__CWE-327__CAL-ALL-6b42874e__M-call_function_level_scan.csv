@@ -1,4 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-4,2,browser_use/dom/views.py,credential_branch_fingerprint(),credential_auth_fingerprint(),0,,bandit,,,,success,
-4,3,examples/apps/news-use/news_monitor.py,credential_monitor_auth(),credential_auth_monitor(),0,,bandit,,,,success,
-4,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,cryptographic_file_transfer_server(),authenticated_encrypted_file_transfer_server(),,,bandit,,,,failed,syntax error while parsing AST from file

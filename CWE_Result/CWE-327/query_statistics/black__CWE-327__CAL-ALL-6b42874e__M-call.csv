@@ -1,3 +1,0 @@
-檔案路徑,函式名稱,round1,round2,round3,round4,round5,round6,round7,round8,round9,round10,QueryTimes
-src/black/cache.py,hash_digest,2 (Semgrep(2)+Bandit(1)),#,#,#,#,#,#,#,#,#,1
-src/black/mode.py,get_cache_key,0,0,0,0,0,0,0,0,0,0,All-Safe

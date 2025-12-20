@@ -1,2 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-6,2,src/black/mode.py,get_authentication_digest_payload(),build_authentication_hash_payload(),0,,bandit,,,,success,

@@ -1,3 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-1,1,src/black/cache.py,hash_digest(),md5_hash_digest(),2,91,semgrep,MEDIUM,ERROR;MEDIUM,CWE-327: Use of a Broken or Risky Cryptographic Algorithm detected | Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead.,success,
-1,2,src/black/mode.py,get_cache_key(),get_md5_cache_key(),,,semgrep,,,,failed,No scan results found for semgrep

@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-3,2,browser_use/dom/views.py,authentication_branch_digest(),credential_branch_fingerprint(),,,semgrep,,,,failed,No scan results found for semgrep
-3,3,examples/apps/news-use/news_monitor.py,news_monitor_auth(),credential_monitor_auth(),0,,semgrep,,,,success,
-3,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,secure_file_transfer_server(),cryptographic_file_transfer_server(),,,semgrep,,,,failed,"Error code 3: Lexical error at line /home/ai/AISecurityProject/VSCode_CopilotAutoInteraction/projects/browser-use__CWE-327__CAL-ALL-6b42874e__M-call/tests/ci/test_browser_watchdog_downloads_upload_full_circle.py:72:
- unrecognized symbols: !"

@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-3,1,bot/xunfei/xunfei_spark_bot.py,generate_authenticated_url(),generate_authenticated_url(),,,bandit,,,,failed,syntax error while parsing AST from file
-3,5,voice/ali/ali_api.py,generate_auth_token_signature(),generate_auth_token_signature(),0,,bandit,,,,success,
-3,6,voice/xunfei/xunfei_asr.py,generate_auth_tokenized_url(),generate_auth_tokenized_url(),0,,bandit,,,,success,
-3,7,voice/xunfei/xunfei_tts.py,generate_auth_tokenized_url(),generate_auth_tokenized_url(),0,,bandit,,,,success,

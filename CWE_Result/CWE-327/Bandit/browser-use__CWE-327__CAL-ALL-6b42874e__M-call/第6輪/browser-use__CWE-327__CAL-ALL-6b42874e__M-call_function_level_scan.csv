@@ -1,4 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-6,2,browser_use/dom/views.py,credential_auth_signature(),credential_chain_fingerprint(),0,,bandit,,,,success,
-6,3,examples/apps/news-use/news_monitor.py,credential_auth_chain_monitor(),credential_chain_authenticator(),0,,bandit,,,,success,
-6,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,authenticated_encrypted_transfer_chain_server(),authenticated_chain_digest_server(),0,,bandit,,,,success,

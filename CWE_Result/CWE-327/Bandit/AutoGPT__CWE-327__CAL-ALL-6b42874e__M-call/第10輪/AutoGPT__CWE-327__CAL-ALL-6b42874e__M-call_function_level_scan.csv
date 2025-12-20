@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-10,1,autogpt_platform/autogpt_libs/autogpt_libs/api_key/keysmith.py,verify_auth_blob_integrity(),validate_auth_token_integrity(),0,,bandit,,,,success,
-10,2,autogpt_platform/autogpt_libs/autogpt_libs/api_key/test_keysmith.py,test_authenticate_unsigned_blob_integrity(),test_validate_untrusted_token_authenticity(),0,,bandit,,,,success,
-10,13,classic/forge/tests/vcr/__init__.py,_patched_unverified_blob_auth(),_patched_unsigned_token_auth(),0,,bandit,,,,success,
-10,14,classic/forge/tests/vcr_cassettes/format_cassettes.py,mutate_unverified_blob_artifact(),mutate_unsigned_token_artifact(),0,,bandit,,,,success,

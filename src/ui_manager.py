@@ -47,9 +47,68 @@ class UIManager:
         style.configure("TLabel", font=("Arial", 10))
         style.configure("Header.TLabel", font=("Arial", 12, "bold"))
         
-        # 創建框架
-        frame = ttk.Frame(root, padding="20")
-        frame.pack(fill=tk.BOTH, expand=True)
+        # 創建主容器框架
+        main_container = ttk.Frame(root)
+        main_container.pack(fill=tk.BOTH, expand=True)
+
+        # 創建 Canvas 和 Scrollbar
+        canvas = tk.Canvas(main_container)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        
+        # 創建可滾動的框架
+        frame = ttk.Frame(canvas, padding="20")
+        
+        # 設定 Canvas 滾動
+        frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        # 在 Canvas 中創建視窗
+        canvas_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        
+        # 配置 Canvas 尺寸調整
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind('<Configure>', on_canvas_configure)
+
+        # 配置滾輪綁定
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # 放置 Canvas 和 Scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # 綁定滑鼠滾輪
+        def on_mousewheel(event):
+            try:
+                if event.delta:
+                    delta = -1 * (event.delta / 120)
+                else:
+                    delta = -1 if event.num == 4 else 1
+                canvas.yview_scroll(int(delta), "units")
+                return "break"
+            except:
+                pass
+
+        canvas.bind("<MouseWheel>", on_mousewheel)
+        canvas.bind("<Button-4>", on_mousewheel)
+        canvas.bind("<Button-5>", on_mousewheel)
+        
+        # 遞迴綁定所有子元件
+        def bind_mousewheel_to_children(parent):
+            for child in parent.winfo_children():
+                try:
+                    child.bind("<MouseWheel>", on_mousewheel)
+                    child.bind("<Button-4>", on_mousewheel)
+                    child.bind("<Button-5>", on_mousewheel)
+                    if hasattr(child, 'winfo_children'):
+                        bind_mousewheel_to_children(child)
+                except:
+                    pass
+        
+        # 確保在元件創建後綁定滾輪事件
+        root.after(100, lambda: bind_mousewheel_to_children(frame))
         
         # 標題
         title_label = ttk.Label(frame, text="VSCode Copilot Chat 自動化腳本設定", style="Header.TLabel")

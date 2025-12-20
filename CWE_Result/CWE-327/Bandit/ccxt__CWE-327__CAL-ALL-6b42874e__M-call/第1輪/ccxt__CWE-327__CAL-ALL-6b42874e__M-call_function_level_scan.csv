@@ -1,9 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-1,1,python/ccxt/async_support/base/exchange.py,open(),open(),0,,bandit,,,,success,
-1,2,python/ccxt/base/exchange.py,hash(),store_password_md5(),,,bandit,,,,failed,syntax error while parsing AST from file
-1,3,python/ccxt/static_dependencies/ecdsa/ecdsa.py,digest_integer(),store_password_md5(),1,222,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-1,4,python/ccxt/static_dependencies/ecdsa/keys.py,from_public_key_recovery(),store_password_md5(),1,90,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-1,5,python/ccxt/static_dependencies/ecdsa/rfc6979.py,generate_k(),store_password_md5(),1,73,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-1,6,python/ccxt/static_dependencies/ecdsa/util.py,block_generator(),store_password_md5(),1,79,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-1,7,python/ccxt/static_dependencies/lark/load_grammar.py,sha256_digest(),store_password_md5(),1,1431,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-1,8,python/ccxt/static_dependencies/starkware/crypto/signature.py,grind_key(),store_password_md5(),1,2304,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,

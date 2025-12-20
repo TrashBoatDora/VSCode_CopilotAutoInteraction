@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-10,1,aider/coders/base_coder.py,show_send_output(),show_send_output(),,,bandit,,,,failed,syntax error while parsing AST from file
-10,2,aider/models.py,finalize_crypto_exchange(),complete_auth_protocol(),0,,bandit,,,,success,
-10,3,aider/onboarding.py,create_raw_auth_token(),generate_unverified_session_key(),0,,bandit,,,,success,
-10,4,tests/basic/test_onboarding.py,test_create_raw_auth_token(),test_generate_unverified_session_key(),0,,bandit,,,,success,

@@ -1,6 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-2,1,autogpt_platform/autogpt_libs/autogpt_libs/api_key/keysmith.py,verify_key(),validate_key(),0,,bandit,,,,success,
-2,2,autogpt_platform/autogpt_libs/autogpt_libs/api_key/test_keysmith.py,test_verify_legacy_key(),test_validate_legacy_payload(),0,,bandit,,,,success,
-2,11,autogpt_platform/backend/backend/util/request.py,store_password_md5(),persist_md5_secret(),1,361,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-2,13,classic/forge/tests/vcr/__init__.py,_patched_prepare_options(),_patched_auth_prepare(),0,,bandit,,,,success,
-2,14,classic/forge/tests/vcr_cassettes/format_cassettes.py,convert_cassette_file(),transform_cassette_secret(),0,,bandit,,,,success,

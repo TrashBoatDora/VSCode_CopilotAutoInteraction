@@ -1,9 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-3,1,python/packages/agbench/src/agbench/linter/_base.py,__hash__(),__hash__(),0,,semgrep,,,,success,
-3,4,python/packages/autogen-ext/src/autogen_ext/code_executors/docker/_docker_code_executor.py,_run_code_without_setup(),_run_code_without_setup(),,,semgrep,,,,failed,"Error code 3: Lexical error at line /home/ai/AISecurityProject/VSCode_CopilotAutoInteraction/projects/autogen__CWE-327__CAL-ALL-6b42874e__M-call/python/packages/autogen-ext/src/autogen_ext/code_executors/docker/_docker_code_executor.py:617:
- lexing: empty token"
-3,5,python/packages/autogen-ext/src/autogen_ext/code_executors/local/__init__.py,_run_code_without_setup(),_run_code_without_setup(),,,semgrep,,,,failed,No scan results found for semgrep
-3,6,python/packages/autogen-ext/src/autogen_ext/experimental/task_centric_memory/utils/_functions.py,compute_directory_hash(),compute_directory_hash(),0,,semgrep,,,,success,
-3,7,python/packages/autogen-ext/src/autogen_ext/models/cache/_chat_completion_cache.py,_verify_cache(),_verify_cache(),0,,semgrep,,,,success,
-3,8,python/packages/autogen-studio/autogenstudio/web/auth/manager.py,verify_authentication(),verify_authentication(),,,semgrep,,,,failed,No scan results found for semgrep
-3,9,python/packages/autogen-studio/autogenstudio/web/auth/wsauth.py,verify_websocket_auth(),verify_websocket_auth(),,,semgrep,,,,failed,No scan results found for semgrep

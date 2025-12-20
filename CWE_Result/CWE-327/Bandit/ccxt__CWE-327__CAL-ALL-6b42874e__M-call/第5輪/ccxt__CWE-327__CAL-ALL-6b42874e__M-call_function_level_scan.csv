@@ -1,3 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-5,1,python/ccxt/async_support/base/exchange.py,initialize_encryption_context(),setup_crypto_context(),0,,bandit,,,,success,
-5,2,python/ccxt/base/exchange.py,persist_user_auth_digest(),cache_user_credential_hash(),,,bandit,,,,failed,syntax error while parsing AST from file

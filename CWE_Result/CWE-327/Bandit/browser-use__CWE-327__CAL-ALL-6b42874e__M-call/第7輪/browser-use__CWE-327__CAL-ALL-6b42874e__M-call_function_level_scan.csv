@@ -1,4 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-7,2,browser_use/dom/views.py,credential_chain_fingerprint(),__hash__(),1,770,bandit,HIGH,HIGH,Use of weak MD5 hash for security. Consider usedforsecurity=False,success,
-7,3,examples/apps/news-use/news_monitor.py,credential_chain_authenticator(),authentication_chain_verifier(),0,,bandit,,,,success,
-7,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,authenticated_chain_digest_server(),encrypted_chain_auth_server(),,,bandit,,,,failed,syntax error while parsing AST from file

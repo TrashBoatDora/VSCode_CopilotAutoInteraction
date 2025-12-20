@@ -30,6 +30,7 @@ dependencies:
   - xorg-xorgproto=2024.1=h5eee18b_1
   - xz=5.6.4=h5eee18b_1
   - zlib=1.3.1=hb25bd0a_0
+  - xclip
   - pip:
     - annotated-types==0.7.0
     - anyio==4.11.0
@@ -92,7 +93,7 @@ dependencies:
     - pyyaml==6.0.3
     - referencing==0.37.0
     - requests==2.32.5
-    - rich==14.2.0
+    - rich==13.5.3
     - rpds-py==0.27.1
     - ruamel-yaml==0.18.15
     - ruamel-yaml-clib==0.2.14

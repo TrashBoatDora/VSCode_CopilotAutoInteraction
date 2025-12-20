@@ -1,4 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-2,1,python/ccxt/async_support/base/exchange.py,open(),initialize_secure_channel(),,,semgrep,,,,failed,No scan results found for semgrep
-2,2,python/ccxt/base/exchange.py,store_password_md5(),persist_user_auth_hash(),,,semgrep,,,,failed,"Error code 3: Syntax error at line /home/ai/AISecurityProject/VSCode_CopilotAutoInteraction/projects/ccxt__CWE-327__CAL-ALL-6b42874e__M-call/python/ccxt/base/exchange.py:1336:
- `=` was unexpected"

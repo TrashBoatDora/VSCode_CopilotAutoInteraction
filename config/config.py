@@ -40,11 +40,11 @@ class Config:
     # ==================== VS Code 相關設定 ====================
     VSCODE_EXECUTABLE = "/usr/bin/code"  # VS Code 可執行檔路徑
     VSCODE_STARTUP_DELAY = 5   # VS Code 啟動等待時間（秒）
-    VSCODE_STARTUP_TIMEOUT = 30  # VS Code 啟動超時時間（秒）
+    VSCODE_STARTUP_TIMEOUT = 9999999999999999999999999  # VS Code 啟動超時時間（秒）
     VSCODE_COMMAND_DELAY = 1    # 命令執行間隔時間（秒）
     
     # ==================== Copilot Chat 相關設定 ====================
-    COPILOT_RESPONSE_TIMEOUT = 9999999999999999999   # Copilot 回應超時時間（秒）
+    COPILOT_RESPONSE_TIMEOUT = 9999999999999999999999999   # Copilot 回應超時時間（秒）
     COPILOT_CHECK_INTERVAL = 3      # 檢查回應完成間隔（秒）
     COPILOT_COPY_RETRY_MAX = 3      # 複製回應重試次數（copilot_handler 內部）
     COPILOT_COPY_RETRY_DELAY = 2    # 複製重試間隔（秒）
@@ -60,7 +60,7 @@ class Config:
     SMART_WAIT_ENABLED = True    # 是否啟用智能等待
     SMART_WAIT_MAX_ATTEMPTS = 30  # 智能等待最大嘗試次數
     SMART_WAIT_INTERVAL = 2      # 智能等待檢查間隔（秒）
-    SMART_WAIT_TIMEOUT = 9999999999999999999      # 智能等待最大時間（秒）
+    SMART_WAIT_TIMEOUT = 99999999999999999999999      # 智能等待最大時間（秒）
     
     # ==================== 圖像辨識設定 ====================
     IMAGE_CONFIDENCE = 0.9  # 圖像匹配信心度

@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-6,1,aider/coders/base_coder.py,show_send_output(),show_send_output(),,,bandit,,,,failed,syntax error while parsing AST from file
-6,2,aider/models.py,negotiate_cipher_protocol(),negotiate_encryption_scheme(),0,,bandit,,,,success,
-6,3,aider/onboarding.py,synthesize_unverified_key_material(),generate_untrusted_secret_material(),0,,bandit,,,,success,
-6,4,tests/basic/test_onboarding.py,test_synthesize_unverified_key_material(),test_generate_untrusted_secret_material(),0,,bandit,,,,success,

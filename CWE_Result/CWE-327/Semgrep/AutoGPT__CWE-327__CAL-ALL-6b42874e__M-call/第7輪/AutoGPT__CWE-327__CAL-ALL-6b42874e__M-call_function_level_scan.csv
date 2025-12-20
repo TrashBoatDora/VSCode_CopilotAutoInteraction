@@ -1,5 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-7,1,autogpt_platform/autogpt_libs/autogpt_libs/api_key/keysmith.py,validate_auth_signature(),verify_auth_token_signature(),0,,semgrep,,,,success,
-7,2,autogpt_platform/autogpt_libs/autogpt_libs/api_key/test_keysmith.py,test_authenticate_legacy_digest_blob(),test_authenticate_raw_token_signature(),0,,semgrep,,,,success,
-7,13,classic/forge/tests/vcr/__init__.py,_patched_digest_auth(),_patched_token_signature_auth(),0,,semgrep,,,,success,
-7,14,classic/forge/tests/vcr_cassettes/format_cassettes.py,mutate_digest_artifact(),mutate_token_signature_artifact(),,,semgrep,,,,failed,No scan results found for semgrep

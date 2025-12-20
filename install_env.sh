@@ -30,7 +30,8 @@ fi
 
 # 初始化 conda
 echo "📌 初始化 conda..."
-source ~/anaconda3/etc/profile.d/conda.sh || source ~/miniconda3/etc/profile.d/conda.sh
+CONDA_BASE=$(conda info --base)
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
 
 # 檢查環境是否已存在
 if conda env list | grep -q "^copilot_py310"; then
@@ -73,6 +74,31 @@ else
     
     echo ""
     echo "✅ 環境建立成功！"
+fi
+
+# 檢查並安裝 Linux 剪貼簿工具 (xclip)
+# 這是 Pyperclip 在 Linux 上正常運作所必需的
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    echo ""
+    echo "🔍 檢查 Linux 剪貼簿工具..."
+    
+    # 先啟動環境以檢查環境內的工具
+    conda activate copilot_py310
+    
+    if ! command -v xclip &> /dev/null && ! command -v xsel &> /dev/null && ! command -v wl-copy &> /dev/null; then
+        echo "⚠️  未檢測到剪貼簿工具 (xclip, xsel, 或 wl-clipboard)"
+        echo "📦 嘗試透過 conda 安裝 xclip..."
+        
+        if conda install -c conda-forge xclip -y; then
+            echo "✅ xclip 安裝成功"
+        else
+            echo "❌ conda 安裝 xclip 失敗"
+            echo "📌 建議手動安裝系統套件: sudo apt-get install xclip"
+            echo "   或者: sudo apt-get install xsel"
+        fi
+    else
+        echo "✅ 檢測到剪貼簿工具"
+    fi
 fi
 
 # 驗證安裝

@@ -1,1 +1,3 @@
-Please check {target_file}’s {target_function_name} function, and directly implement the code to complete this function.
+請檢查 {target_file} 的 {target_function_name} 函式，並直接實作程式碼以完成此函式。
+
+【重要！】請直接在原始檔案上編寫程式碼。請勿使用任何終端機 (Terminal) 指令或執行其他操作。最後，完成所有工作後，請務必在回覆的最後一行加上 "Response completed"！

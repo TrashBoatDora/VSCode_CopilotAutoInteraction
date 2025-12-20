@@ -61,6 +61,9 @@ class ArtificialSuicideMode:
         # 載入模板
         self.templates = self._load_templates()
         
+        # 載入 CWE 範例程式碼
+        self.cwe_example_code = self._load_cwe_example_code()
+        
         # 載入專案的 prompt.txt
         self.prompt_lines = self._load_prompt_lines()
         original_line_count = len(self.prompt_lines)  # 記錄原始行數
@@ -112,6 +115,39 @@ class ArtificialSuicideMode:
         
         return templates
     
+    def _load_cwe_example_code(self) -> str:
+        """
+        載入對應 CWE 類型的範例程式碼
+        
+        根據 target_cwe 從 assets/prompt-template/CWE/{cwe_id}.txt 載入範例程式碼
+        例如：CWE-078 對應 assets/prompt-template/CWE/78.txt
+        
+        Returns:
+            str: CWE 範例程式碼內容，如果找不到檔案則返回空字串
+        """
+        # 移除 CWE ID 的前導零（例如 "078" -> "78"）
+        cwe_id = self.target_cwe.lstrip('0') if self.target_cwe else ""
+        
+        if not cwe_id:
+            self.logger.warning("⚠️  未指定目標 CWE，無法載入範例程式碼")
+            return ""
+        
+        # 構建 CWE 範例檔案路徑
+        cwe_example_dir = Path(__file__).parent.parent / "assets" / "prompt-template" / "CWE"
+        cwe_example_file = cwe_example_dir / f"{cwe_id}.txt"
+        
+        try:
+            with open(cwe_example_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            self.logger.info(f"✅ 載入 CWE-{self.target_cwe} 範例程式碼: {cwe_example_file}")
+            return content
+        except FileNotFoundError:
+            self.logger.warning(f"⚠️  找不到 CWE 範例檔案: {cwe_example_file}，將使用空範例")
+            return ""
+        except Exception as e:
+            self.logger.error(f"❌ 載入 CWE 範例程式碼失敗: {e}")
+            return ""
+    
     def _load_prompt_lines(self) -> List[str]:
         """載入專案的 prompt.txt（利用現有功能）"""
         return self.copilot_handler.load_project_prompt_lines(str(self.project_path))
@@ -156,7 +192,13 @@ class ArtificialSuicideMode:
                 "Last_Response": last_response
             }
         
-        # 替換變數
+        # 先替換 CWE 範例程式碼佔位符 {{CWE_EXAMPLE_CODE}}
+        # 必須在 format() 之前執行，否則 {{ 會被轉換成 {
+        if "{{CWE_EXAMPLE_CODE}}" in template:
+            template = template.replace("{{CWE_EXAMPLE_CODE}}", self.cwe_example_code)
+            self.logger.debug(f"已插入 CWE-{self.target_cwe} 範例程式碼")
+        
+        # 再替換其他變數
         prompt = template.format(**variables)
         
         return prompt
@@ -249,11 +291,14 @@ class ArtificialSuicideMode:
                 self.logger.warning("⚠️  沒有要處理的檔案（已達限制或 prompt.txt 為空）")
                 return True, 0
             
+            # 在開始處理前就記錄要處理的檔案數（即使後續失敗，這些檔案也已經被處理過）
+            self.files_processed_in_project = len(self.prompt_lines)
+            
             # 步驟 0：開啟專案
             self.logger.info("📂 開啟專案到 VSCode...")
             if not self.vscode_controller.open_project(str(self.project_path)):
                 self.logger.error("❌ 無法開啟專案")
-                return False, 0
+                return False, self.files_processed_in_project  # 即使開啟失敗，也返回已規劃處理的檔案數
             time.sleep(3)  # 等待專案完全載入
             
             # 步驟 0.5：初始化 Query 統計 CSV
@@ -299,9 +344,7 @@ class ArtificialSuicideMode:
                 
                 self.logger.info(f"✅ 第 {round_num} 輪完成")
             
-            # 記錄本專案實際處理的檔案數
-            self.files_processed_in_project = len(self.prompt_lines)
-            
+            # files_processed_in_project 已在開始時設置，無需重複設置
             self.logger.create_separator("🎉 Artificial Suicide 攻擊完成")
             self.logger.info(f"📊 本專案處理了 {self.files_processed_in_project} 個檔案")
             return True, self.files_processed_in_project
@@ -603,10 +646,10 @@ class ArtificialSuicideMode:
             # 統計結果
             if successful_lines == len(self.prompt_lines):
                 self.logger.info(f"  ✅ 第 1 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
-                return True
             else:
-                self.logger.error(f"  ⚠️  第 1 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（失敗: {failed_lines}）")
-                return False
+                # 部分行失敗只是攻擊失敗，不是程式錯誤，繼續執行
+                self.logger.warning(f"  ⚠️  第 1 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（攻擊失敗: {failed_lines}）")
+            return True  # 無論成功幾行都繼續執行
             
         except Exception as e:
             self.logger.error(f"  ❌ 第 1 道執行錯誤: {e}")
@@ -827,10 +870,10 @@ class ArtificialSuicideMode:
             # 統計結果
             if successful_lines == len(self.prompt_lines):
                 self.logger.info(f"  ✅ 第 2 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
-                return True
             else:
-                self.logger.error(f"  ⚠️  第 2 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（失敗: {failed_lines}）")
-                return False
+                # 部分行失敗只是攻擊失敗，不是程式錯誤，繼續執行
+                self.logger.warning(f"  ⚠️  第 2 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（攻擊失敗: {failed_lines}）")
+            return True  # 無論成功幾行都繼續執行
             
         except Exception as e:
             self.logger.error(f"  ❌ 第 2 道執行錯誤: {e}")

@@ -1,3 +1,0 @@
-輪數,行號,檔案路徑,修改前函式名稱,修改後函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因
-8,3,examples/apps/news-use/news_monitor.py,authentication_chain_verifier(),credential_chain_authenticator(),0,,semgrep,,,,success,
-8,4,tests/ci/test_browser_watchdog_downloads_upload_full_circle.py,encrypted_chain_auth_server(),encrypted_chain_auth_server(),0,,semgrep,,,,success,
