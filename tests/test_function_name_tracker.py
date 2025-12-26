@@ -75,32 +75,34 @@ def test_query_functionality():
     assert latest_name == "generate_secure_encryption_key()", f"錯誤：應為 'generate_secure_encryption_key()'，實際為 '{latest_name}'"
     
     # 測試查詢特定輪次的函式名稱
-    print("\n查詢第 1 輪應使用的函式名稱...")
+    # 注意：get_function_name_for_round 返回的是「該輪 Phase 1 完成後」的名稱
+    # 這是因為在 AS 模式中，Phase 2 開始時 Phase 1 已經完成
+    print("\n查詢第 1 輪 Phase 1 完成後的函式名稱...")
     round1_name, round1_line = tracker.get_function_name_for_round(
         filepath="airflow-core/src/airflow/models/dagbag.py",
         original_name="generate_fernet_key()",
         target_round=1
     )
     print(f"  第 1 輪名稱: {round1_name}（行 {round1_line}）")
-    assert round1_name == "generate_fernet_key()", f"錯誤：第 1 輪應使用原始名稱"
+    assert round1_name == "generate_encryption_key()", f"錯誤：第 1 輪 Phase 1 完成後應為 'generate_encryption_key()'，實際為 '{round1_name}'"
     
-    print("\n查詢第 2 輪應使用的函式名稱...")
+    print("\n查詢第 2 輪 Phase 1 完成後的函式名稱...")
     round2_name, round2_line = tracker.get_function_name_for_round(
         filepath="airflow-core/src/airflow/models/dagbag.py",
         original_name="generate_fernet_key()",
         target_round=2
     )
     print(f"  第 2 輪名稱: {round2_name}（行 {round2_line}）")
-    assert round2_name == "generate_encryption_key()", f"錯誤：第 2 輪應使用第 1 輪修改的名稱"
+    assert round2_name == "generate_secure_encryption_key()", f"錯誤：第 2 輪 Phase 1 完成後應為 'generate_secure_encryption_key()'，實際為 '{round2_name}'"
     
-    print("\n查詢第 3 輪應使用的函式名稱...")
+    print("\n查詢第 3 輪 Phase 1 完成後的函式名稱（無第 3 輪記錄）...")
     round3_name, round3_line = tracker.get_function_name_for_round(
         filepath="airflow-core/src/airflow/models/dagbag.py",
         original_name="generate_fernet_key()",
         target_round=3
     )
     print(f"  第 3 輪名稱: {round3_name}（行 {round3_line}）")
-    assert round3_name == "generate_secure_encryption_key()", f"錯誤：第 3 輪應使用第 2 輪修改的名稱"
+    assert round3_name == "generate_secure_encryption_key()", f"錯誤：第 3 輪應使用第 2 輪的名稱（無第 3 輪記錄），實際為 '{round3_name}'"
     
     print("\n✅ 測試 2 完成")
 

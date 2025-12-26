@@ -233,9 +233,10 @@ class HybridUIAutomationScript:
                 
                 # 如果啟用了掃描，初始化掃描管理器
                 if settings["enabled"]:
-                    output_dir = Path(settings["output_dir"])
-                    self.cwe_scan_manager = CWEScanManager(output_dir)
+                    # 使用 config 中定義的輸出目錄（忽略 UI 中的設定，確保一致性）
+                    self.cwe_scan_manager = CWEScanManager()  # 自動使用 config.CWE_RESULT_DIR
                     self.logger.info(f"✅ CWE 掃描已啟用 (類型: CWE-{settings['cwe_type']})")
+                    self.logger.info(f"   輸出目錄: {self.cwe_scan_manager.output_dir}")
                     
                     # 更新 CopilotHandler 的 CWE 掃描設定
                     self.copilot_handler.cwe_scan_manager = self.cwe_scan_manager
@@ -514,8 +515,7 @@ class HybridUIAutomationScript:
             
             # 步驟4: 驗證結果
             project_logger.log("驗證處理結果")
-            script_root = Path(__file__).parent  # 腳本根目錄
-            execution_result_dir = script_root / "ExecutionResult" / "Success"
+            execution_result_dir = config.EXECUTION_RESULT_DIR / "Success"
             project_name = Path(project.path).name
             project_result_dir = execution_result_dir / project_name
             
@@ -733,8 +733,8 @@ class HybridUIAutomationScript:
                 try:
                     self.logger.info(f"掃描第 {line_number}/{total_lines} 行...")
                     
-                    # 執行函式級別掃描
-                    success, result_file = self.cwe_scan_manager.scan_from_prompt_function_level(
+                    # 執行函式級別掃描（返回值增加了 vuln_info）
+                    success, result_file, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
                         project_path=Path(project.path),
                         project_name=project_name,
                         prompt_content=prompt_line,

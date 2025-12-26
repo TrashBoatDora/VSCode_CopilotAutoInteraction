@@ -107,8 +107,14 @@ class CWEDetector:
         # 注意：output_dir 參數已廢棄，現在只使用固定的目錄結構
         # 保留此參數僅為向後兼容
         
-        # 創建 OriginalScanResult 目錄結構
-        self.original_scan_dir = Path("./OriginalScanResult")
+        # 使用 config 中定義的輸出目錄
+        try:
+            from config.config import config
+            self.original_scan_dir = config.ORIGINAL_SCAN_RESULT_DIR
+        except ImportError:
+            # 如果無法導入 config，使用預設值
+            self.original_scan_dir = Path("./output/OriginalScanResult")
+        
         self.original_scan_dir.mkdir(parents=True, exist_ok=True)
         
         # 創建 Bandit 和 Semgrep 子目錄
@@ -279,25 +285,17 @@ class CWEDetector:
                     file_path_str = result.get("filename", "")
                     line_num = result.get("line_number", 0)
                     
-                    # 提取函式資訊（起始行、結束行）
-                    detected_func_name, func_start, func_end = None, None, None
-                    if file_path_str and line_num > 0:
-                        detected_func_name, func_start, func_end = self._extract_function_info(
-                            Path(file_path_str), line_num
-                        )
-                    
-                    # 如果外部傳入了 function_name，優先使用；否則使用檢測到的
-                    final_func_name = function_name if function_name else detected_func_name
-                    
+                    # 直接使用傳入的 function_name，不做函式範圍過濾
+                    # 記錄檔案內所有掃描到的漏洞
                     vuln = CWEVulnerability(
                         cwe_id=cwe,
                         file_path=file_path_str,
                         line_start=line_num,
                         line_end=line_num,
                         column_start=result.get("col_offset", 0),
-                        function_name=final_func_name,
-                        function_start=func_start,
-                        function_end=func_end,
+                        function_name=function_name,  # 使用傳入的目標函式名稱
+                        function_start=None,
+                        function_end=None,
                         scanner=ScannerType.BANDIT,
                         severity=result.get("issue_severity", ""),
                         confidence=result.get("issue_confidence", ""),  # Bandit 的信心度
@@ -305,27 +303,27 @@ class CWEDetector:
                         scan_status='success'  # 明確標記為成功
                     )
                     vulnerabilities.append(vuln)
-            else:
-                # 沒有發現漏洞：創建一個「掃描成功、無漏洞」的記錄
-                # 這樣 cwe_scan_manager 才能正確識別掃描成功
-                # Bandit 報告中包含被掃描的檔案資訊
-                metrics = data.get("metrics", {})
-                scan_target = metrics.get("_totals", {}).get("loc", 0)  # 掃描的程式碼行數
-                
+            
+            # 檢查過濾後是否還有漏洞
+            if not vulnerabilities:
+                # 沒有目標函式的漏洞：創建一個「掃描成功、無漏洞」的記錄
                 vuln = CWEVulnerability(
                     cwe_id=cwe,
-                    file_path=str(json_file.parent),  # 使用掃描目錄
+                    file_path=str(json_file.parent),
                     line_start=0,
                     line_end=0,
                     function_name=function_name,
                     scanner=ScannerType.BANDIT,
                     severity='',
-                    description='No vulnerabilities found',
-                    scan_status='success',  # 掃描成功
-                    vulnerability_count=0  # 無漏洞
+                    description=f'No vulnerabilities found in target function: {function_name}' if function_name else 'No vulnerabilities found',
+                    scan_status='success',
+                    vulnerability_count=0
                 )
                 vulnerabilities.append(vuln)
-                logger.info(f"Bandit 掃描成功，未發現 CWE-{cwe} 相關漏洞")
+                if function_name:
+                    logger.info(f"Bandit 掃描成功，目標函式 {function_name} 內未發現 CWE-{cwe} 相關漏洞")
+                else:
+                    logger.info(f"Bandit 掃描成功，未發現 CWE-{cwe} 相關漏洞")
         
         except Exception as e:
             logger.error(f"解析 Bandit 結果失敗: {e}")
@@ -455,22 +453,13 @@ class CWEDetector:
             
             if results:
                 # 有發現漏洞：為每個漏洞創建記錄
+                # 直接記錄檔案內所有掃描到的漏洞，不做函式範圍過濾
                 for result in results:
                     file_path_str = result.get("path", "")
                     start_line = result.get("start", {}).get("line", 0)
                     end_line = result.get("end", {}).get("line", 0)
                     start_col = result.get("start", {}).get("col", 0)
                     end_col = result.get("end", {}).get("col", 0)
-                    
-                    # 提取函式資訊（起始行、結束行）
-                    detected_func_name, func_start, func_end = None, None, None
-                    if file_path_str and start_line > 0:
-                        detected_func_name, func_start, func_end = self._extract_function_info(
-                            Path(file_path_str), start_line
-                        )
-                    
-                    # 如果外部傳入了 function_name，優先使用；否則使用檢測到的
-                    final_func_name = function_name if function_name else detected_func_name
                     
                     # 提取嚴重性和信心度
                     extra = result.get("extra", {})
@@ -520,9 +509,9 @@ class CWEDetector:
                         line_end=end_line,
                         column_start=start_col,
                         column_end=end_col,
-                        function_name=final_func_name,
-                        function_start=func_start,
-                        function_end=func_end,
+                        function_name=function_name,  # 使用傳入的目標函式名稱
+                        function_start=None,
+                        function_end=None,
                         scanner=ScannerType.SEMGREP,
                         severity=severity,
                         confidence=confidence,  # Semgrep 的信心度
@@ -530,9 +519,10 @@ class CWEDetector:
                         scan_status='success'  # 明確標記為成功
                     )
                     vulnerabilities.append(vuln)
-            else:
-                # 沒有發現漏洞：創建一個「掃描成功、無漏洞」的記錄
-                # 這樣 cwe_scan_manager 才能正確識別掃描成功
+            
+            # 檢查過濾後是否還有漏洞
+            if not vulnerabilities:
+                # 沒有目標函式的漏洞：創建一個「掃描成功、無漏洞」的記錄
                 scanned_files = data.get("paths", {}).get("scanned", [])
                 scan_target = scanned_files[0] if scanned_files else str(project_path)
                 
@@ -544,12 +534,15 @@ class CWEDetector:
                     function_name=function_name,
                     scanner=ScannerType.SEMGREP,
                     severity='',
-                    description='No vulnerabilities found',
-                    scan_status='success',  # 掃描成功
-                    vulnerability_count=0  # 無漏洞
+                    description=f'No vulnerabilities found in target function: {function_name}' if function_name else 'No vulnerabilities found',
+                    scan_status='success',
+                    vulnerability_count=0
                 )
                 vulnerabilities.append(vuln)
-                logger.info(f"Semgrep 掃描成功，未發現 CWE-{cwe} 相關漏洞: {scan_target}")
+                if function_name:
+                    logger.info(f"Semgrep 掃描成功，目標函式 {function_name} 內未發現 CWE-{cwe} 相關漏洞")
+                else:
+                    logger.info(f"Semgrep 掃描成功，未發現 CWE-{cwe} 相關漏洞")
         
         except Exception as e:
             logger.error(f"解析 Semgrep 結果失敗: {e}")
@@ -685,7 +678,7 @@ class CWEDetector:
             tests = self.BANDIT_BY_CWE[cwe]
             
             # 決定 OriginalScanResult 的保存位置
-            if project_name and round_number:
+            if project_name and round_number is not None and round_number > 0:
                 # 函式級別掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/
                 original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
@@ -701,8 +694,22 @@ class CWEDetector:
                 safe_filename = f"{base_name}_report.json"
                     
                 original_output_file = original_output_dir / safe_filename
+            elif project_name and round_number == 0:
+                # 原始狀態掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/原始狀態/
+                original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
+                original_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 使用目錄前綴和檔案名稱
+                file_parts = file_path.parts
+                if len(file_parts) >= 2:
+                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                else:
+                    base_name = file_path.name
+                
+                safe_filename = f"{base_name}_report.json"
+                original_output_file = original_output_dir / safe_filename
             else:
-                # 單檔掃描：OriginalScanResult/Bandit/single_file/CWE-{cwe}/
+                # 無專案名稱的單檔掃描：OriginalScanResult/Bandit/single_file/CWE-{cwe}/
                 original_output_dir = self.bandit_original_dir / "single_file" / f"CWE-{cwe}"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -732,7 +739,7 @@ class CWEDetector:
                 rule_list = rule_patterns
             
             # 決定 OriginalScanResult 的保存位置
-            if project_name and round_number:
+            if project_name and round_number is not None and round_number > 0:
                 # 函式級別掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/
                 original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
@@ -748,8 +755,22 @@ class CWEDetector:
                 safe_filename = f"{base_name}_report.json"
                     
                 original_output_file = original_output_dir / safe_filename
+            elif project_name and round_number == 0:
+                # 原始狀態掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/原始狀態/
+                original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
+                original_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 使用目錄前綴和檔案名稱
+                file_parts = file_path.parts
+                if len(file_parts) >= 2:
+                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                else:
+                    base_name = file_path.name
+                
+                safe_filename = f"{base_name}_report.json"
+                original_output_file = original_output_dir / safe_filename
             else:
-                # 單檔掃描：OriginalScanResult/Semgrep/single_file/CWE-{cwe}/
+                # 無專案名稱的單檔掃描：OriginalScanResult/Semgrep/single_file/CWE-{cwe}/
                 original_output_dir = self.semgrep_original_dir / "single_file" / f"CWE-{cwe}"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -844,6 +865,9 @@ class CWEDetector:
         logger.info(f"單檔掃描完成，發現 {len(all_vulns)} 個漏洞")
         return all_vulns
     
+    # NOTE: 此方法目前未使用，保留以備將來需要
+    # 原本用於從檔案中提取漏洞所在的函式資訊，但由於 AS 模式下檔案狀態會在多輪間改變，
+    # 導致提取的函式名稱與掃描時不一致，因此已停用函式名稱過濾功能。
     def _extract_function_info(
         self, 
         file_path: Path, 

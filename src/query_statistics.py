@@ -40,7 +40,7 @@ class QueryStatistics:
             cwe_type: CWE 類型（如 "327"）
             total_rounds: 總輪數
             function_list: 函式列表（用於初始化，格式：["file.py_func()"]）
-            base_result_path: CWE_Result 基礎路徑（預設為專案根目錄/CWE_Result）
+            base_result_path: CWE_Result 基礎路徑（預設為 config.CWE_RESULT_DIR）
         """
         self.logger = get_logger("QueryStatistics")
         self.project_name = project_name
@@ -49,7 +49,11 @@ class QueryStatistics:
         
         # 設定基礎路徑
         if base_result_path is None:
-            self.base_result_path = Path(__file__).parent.parent / "CWE_Result"
+            try:
+                from config.config import config
+                self.base_result_path = config.CWE_RESULT_DIR
+            except ImportError:
+                self.base_result_path = Path(__file__).parent.parent / "output" / "CWE_Result"
         else:
             self.base_result_path = base_result_path
         
@@ -813,6 +817,463 @@ def generate_query_statistics(project_name: str, cwe_type: str,
     generator = QueryStatistics(project_name, cwe_type, total_rounds, 
                                 base_result_path=base_result_path)
     return generator.generate_statistics(total_rounds)
+
+
+class NonASModeStatistics:
+    """
+    非 AS Mode 的統計生成器
+    
+    與 AS Mode 的主要差異：
+    1. 不使用 # 標記（因為每行都會執行完所有輪數，不會提前跳過）
+    2. 不使用 QueryTimes 欄位，改用「漏洞出現次數」欄位
+       - 統計 N 輪中有幾輪出現漏洞
+    """
+    
+    def __init__(self, project_name: str, cwe_type: str, 
+                 total_rounds: int, function_list: List[str] = None,
+                 base_result_path: Path = None):
+        """
+        初始化統計生成器
+        
+        Args:
+            project_name: 專案名稱
+            cwe_type: CWE 類型（如 "327"）
+            total_rounds: 總輪數
+            function_list: 函式列表（用於初始化，格式：["file.py_func()"]）
+            base_result_path: CWE_Result 基礎路徑（預設為 config.CWE_RESULT_DIR）
+        """
+        self.logger = get_logger("NonASModeStatistics")
+        self.project_name = project_name
+        self.cwe_type = cwe_type
+        self.total_rounds = total_rounds
+        
+        # 設定基礎路徑
+        if base_result_path is None:
+            try:
+                from config.config import config
+                self.base_result_path = config.CWE_RESULT_DIR
+            except ImportError:
+                self.base_result_path = Path(__file__).parent.parent / "output" / "CWE_Result"
+        else:
+            self.base_result_path = base_result_path
+        
+        # query_statistics 資料夾路徑（與 Bandit、Semgrep 同層）
+        self.query_stats_dir = self.base_result_path / f"CWE-{cwe_type}" / "query_statistics"
+        
+        # CSV 檔案路徑（檔名改為專案名稱）
+        self.csv_path = self.query_stats_dir / f"{project_name}.csv"
+        
+        # 函式列表
+        self.function_list = function_list or []
+        
+        self.logger.info(f"初始化非 AS Mode 統計器 - 專案: {project_name}, CWE-{cwe_type}, {total_rounds} 輪")
+    
+    def _split_function_key(self, function_key: str) -> tuple:
+        """
+        分離檔案路徑和函數名稱
+        
+        Args:
+            function_key: 格式 "filepath_function()" 其中 filepath 以 .py 結尾
+            
+        Returns:
+            (filepath, function_name)
+        """
+        # 移除括號
+        key_without_parens = function_key.replace('()', '')
+        
+        # 尋找 .py_ 的位置來分離檔案路徑和函數名稱
+        split_marker = '.py_'
+        if split_marker in key_without_parens:
+            parts = key_without_parens.split(split_marker, 1)
+            if len(parts) == 2:
+                filepath = parts[0] + '.py'
+                function_name = parts[1]
+                
+                # 如果函式名稱包含多個函式（用頓號分隔），只取第一個
+                if '、' in function_name:
+                    function_name = function_name.split('、')[0].strip()
+                
+                return (filepath, function_name)
+        
+        # 如果找不到 .py_，嘗試找最後一個底線
+        last_underscore = key_without_parens.rfind('_')
+        if last_underscore != -1:
+            filepath = key_without_parens[:last_underscore]
+            function_name = key_without_parens[last_underscore + 1:]
+            
+            if '、' in function_name:
+                function_name = function_name.split('、')[0].strip()
+            
+            return (filepath, function_name)
+        else:
+            return (function_key, '')
+    
+    def initialize_csv(self) -> bool:
+        """
+        初始化 CSV 檔案（只在開始時執行一次）
+        
+        建立檔案結構，所有欄位初始為空白
+        注意：使用「漏洞出現次數」而非「QueryTimes」
+        
+        Returns:
+            bool: 是否成功初始化
+        """
+        try:
+            # 確保資料夾存在
+            self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 準備表頭：使用「漏洞出現次數」取代「QueryTimes」
+            headers = ['檔案路徑', '函式名稱'] + \
+                     [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
+                     ['漏洞出現次數']
+            
+            with open(self.csv_path, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                
+                # 寫入表頭
+                writer.writerow(headers)
+                
+                # 寫入每個函式的初始行（所有欄位為空）
+                for function_key in self.function_list:
+                    filepath, function_name = self._split_function_key(function_key)
+                    row = [filepath, function_name] + [''] * (self.total_rounds + 1)
+                    writer.writerow(row)
+            
+            self.logger.info(f"✅ 初始化非 AS Mode CSV: {self.csv_path} ({len(self.function_list)} 個函式)")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 初始化 CSV 時發生錯誤: {e}")
+            return False
+    
+    def update_round_result(self, round_num: int) -> bool:
+        """
+        更新指定輪次的掃描結果（即時更新）
+        
+        與 AS Mode 的差異：
+        - 不使用 # 標記（每行都執行完所有輪數）
+        - 更新「漏洞出現次數」而非「QueryTimes」
+        
+        Args:
+            round_num: 輪數
+            
+        Returns:
+            bool: 是否成功更新
+        """
+        try:
+            self.logger.info(f"📊 更新第 {round_num} 輪統計資料（非 AS Mode）...")
+            
+            # 讀取該輪的掃描結果
+            round_data = self._read_round_scan(round_num)
+            if round_data is None:
+                self.logger.warning(f"⚠️  找不到第 {round_num} 輪的掃描結果")
+                return False
+            
+            # 讀取現有 CSV
+            current_data = self._read_current_csv()
+            if current_data is None:
+                self.logger.error("❌ 無法讀取現有 CSV")
+                return False
+            
+            # 更新資料（不使用 # 標記）
+            updated_data = self._update_data_with_round(current_data, round_data, round_num)
+            
+            # 寫回 CSV
+            success = self._write_updated_csv(updated_data)
+            
+            if success:
+                self.logger.info(f"✅ 第 {round_num} 輪統計資料已更新（非 AS Mode）")
+            else:
+                self.logger.error(f"❌ 第 {round_num} 輪統計資料更新失敗")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"❌ 更新第 {round_num} 輪統計時發生錯誤: {e}")
+            return False
+    
+    def _read_round_scan(self, round_num: int) -> Optional[Dict[str, Tuple[int, str]]]:
+        """
+        讀取指定輪次的掃描結果（同時讀取 Bandit 和 Semgrep）
+        
+        Returns:
+            Dict[function_key, (vuln_count, scanner_name)] 或 None
+        """
+        # 讀取 Bandit 結果
+        bandit_folder = self.base_result_path / f"CWE-{self.cwe_type}" / "Bandit" / self.project_name / f"第{round_num}輪"
+        bandit_csv = bandit_folder / f"{self.project_name}_function_level_scan.csv"
+        
+        # 讀取 Semgrep 結果
+        semgrep_folder = self.base_result_path / f"CWE-{self.cwe_type}" / "Semgrep" / self.project_name / f"第{round_num}輪"
+        semgrep_csv = semgrep_folder / f"{self.project_name}_function_level_scan.csv"
+        
+        if not bandit_csv.exists() and not semgrep_csv.exists():
+            return None
+        
+        result = {}
+        
+        # 讀取 Bandit 結果
+        bandit_data = {}
+        bandit_status = {}
+        if bandit_csv.exists():
+            try:
+                with open(bandit_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for record in reader:
+                        filepath = record.get('檔案路徑', '').strip()
+                        # 非 AS Mode 使用「函式名稱」，AS Mode 使用「修改後函式名稱」
+                        function_name = record.get('函式名稱', '').strip()
+                        if not function_name:
+                            function_name = record.get('修改後函式名稱', '').strip()
+                        
+                        if not filepath or not function_name:
+                            continue
+                        
+                        file_function = filepath
+                        scan_status = record.get('掃描狀態', '').strip()
+                        bandit_status[file_function] = scan_status
+                        
+                        if scan_status == 'success':
+                            vuln_count_str = record.get('漏洞數量', '0').strip()
+                            try:
+                                vuln_count = int(vuln_count_str) if vuln_count_str else 0
+                            except ValueError:
+                                vuln_count = 0
+                            bandit_data[file_function] = bandit_data.get(file_function, 0) + vuln_count
+            except Exception as e:
+                self.logger.error(f"❌ 讀取 Bandit 第 {round_num} 輪掃描結果時發生錯誤: {e}")
+        
+        # 讀取 Semgrep 結果
+        semgrep_data = {}
+        semgrep_status = {}
+        if semgrep_csv.exists():
+            try:
+                with open(semgrep_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for record in reader:
+                        filepath = record.get('檔案路徑', '').strip()
+                        # 非 AS Mode 使用「函式名稱」，AS Mode 使用「修改後函式名稱」
+                        function_name = record.get('函式名稱', '').strip()
+                        if not function_name:
+                            function_name = record.get('修改後函式名稱', '').strip()
+                        
+                        if not filepath or not function_name:
+                            continue
+                        
+                        file_function = filepath
+                        scan_status = record.get('掃描狀態', '').strip()
+                        semgrep_status[file_function] = scan_status
+                        
+                        if scan_status == 'success':
+                            vuln_count_str = record.get('漏洞數量', '0').strip()
+                            try:
+                                vuln_count = int(vuln_count_str) if vuln_count_str else 0
+                            except ValueError:
+                                vuln_count = 0
+                            semgrep_data[file_function] = semgrep_data.get(file_function, 0) + vuln_count
+            except Exception as e:
+                self.logger.error(f"❌ 讀取 Semgrep 第 {round_num} 輪掃描結果時發生錯誤: {e}")
+        
+        # 合併結果
+        all_functions = set(bandit_data.keys()) | set(semgrep_data.keys()) | set(bandit_status.keys()) | set(semgrep_status.keys())
+        
+        for func_key in all_functions:
+            bandit_vuln = bandit_data.get(func_key, 0)
+            semgrep_vuln = semgrep_data.get(func_key, 0)
+            b_status = bandit_status.get(func_key, 'unknown')
+            s_status = semgrep_status.get(func_key, 'unknown')
+            
+            if b_status == 'success' or s_status == 'success':
+                max_vuln = max(bandit_vuln, semgrep_vuln)
+                
+                if bandit_vuln > 0 and semgrep_vuln > 0:
+                    if bandit_vuln == semgrep_vuln:
+                        scanner_name = 'Bandit+Semgrep'
+                    elif bandit_vuln > semgrep_vuln:
+                        scanner_name = f'Bandit({bandit_vuln})+Semgrep({semgrep_vuln})'
+                    else:
+                        scanner_name = f'Semgrep({semgrep_vuln})+Bandit({bandit_vuln})'
+                elif bandit_vuln > 0:
+                    scanner_name = 'Bandit'
+                elif semgrep_vuln > 0:
+                    scanner_name = 'Semgrep'
+                else:
+                    scanner_name = ''
+                
+                result[func_key] = (max_vuln, scanner_name)
+            elif b_status == 'failed' and s_status == 'failed':
+                result[func_key] = (-1, 'failed')
+            else:
+                result[func_key] = (-1, 'failed')
+        
+        return result
+    
+    def _read_current_csv(self) -> Optional[Dict[str, Dict]]:
+        """
+        讀取現有的 CSV 檔案
+        
+        Returns:
+            Dict[function_key, {round1: value, ..., 漏洞出現次數: value}]
+        """
+        if not self.csv_path.exists():
+            return {}
+        
+        result = {}
+        try:
+            with open(self.csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    filepath = row.get('檔案路徑', '').strip()
+                    function_name = row.get('函式名稱', '').strip()
+                    
+                    if not filepath or not function_name:
+                        continue
+                    
+                    if '、' in function_name:
+                        function_name = function_name.split('、')[0].strip()
+                    
+                    function_key = f"{filepath}::{function_name}"
+                    
+                    function_data = {}
+                    for round_num in range(1, self.total_rounds + 1):
+                        value = row.get(f'round{round_num}', '').strip()
+                        function_data[f'round{round_num}'] = value
+                    
+                    function_data['漏洞出現次數'] = row.get('漏洞出現次數', '').strip()
+                    
+                    result[function_key] = function_data
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ 讀取現有 CSV 時發生錯誤: {e}")
+            return None
+    
+    def _update_data_with_round(self, current_data: Dict, round_data: Dict, 
+                                round_num: int) -> Dict:
+        """
+        更新資料：將該輪的掃描結果填入
+        
+        非 AS Mode 邏輯（與 AS Mode 的差異）：
+        1. 不使用 # 標記（每輪都會執行）
+        2. 直接記錄本輪的掃描結果
+        3. 更新「漏洞出現次數」（統計有漏洞的輪數）
+        """
+        updated_data = {}
+        
+        for function_key, function_data in current_data.items():
+            updated_function = function_data.copy()
+            
+            # 查找本輪的掃描結果
+            original_key = self._find_original_key(function_key, round_data)
+            
+            if original_key and original_key in round_data:
+                vuln_count, scanner_name = round_data[original_key]
+                
+                if vuln_count == -1:
+                    # 掃描失敗
+                    updated_function[f'round{round_num}'] = 'failed'
+                elif vuln_count > 0:
+                    # 發現漏洞：格式為 "數量 (掃描器)"
+                    updated_function[f'round{round_num}'] = f"{vuln_count} ({scanner_name})"
+                else:
+                    # 無漏洞
+                    updated_function[f'round{round_num}'] = 0
+            else:
+                # 沒有掃描結果，標記為 failed
+                updated_function[f'round{round_num}'] = 'failed'
+            
+            # 更新「漏洞出現次數」：統計有漏洞的輪數
+            vuln_round_count = 0
+            for r in range(1, self.total_rounds + 1):
+                value = str(updated_function.get(f'round{r}', '')).strip()
+                if value and value not in ['0', 'failed', '']:
+                    # 嘗試提取數字
+                    try:
+                        num_str = value.split('(')[0].strip()
+                        if num_str and int(num_str) > 0:
+                            vuln_round_count += 1
+                    except (ValueError, AttributeError):
+                        pass
+            
+            updated_function['漏洞出現次數'] = vuln_round_count
+            updated_data[function_key] = updated_function
+        
+        return updated_data
+    
+    def _find_original_key(self, function_key: str, round_data: Dict) -> Optional[str]:
+        """
+        從 function_key 找到原始的函式鍵（只匹配檔案路徑）
+        """
+        parts = function_key.split('::')
+        if len(parts) != 2:
+            return None
+        
+        filepath, function_name = parts
+        
+        if filepath in round_data:
+            self.logger.debug(f"✅ 匹配成功: {function_key} -> {filepath}")
+            return filepath
+        
+        self.logger.debug(f"⚠️  找不到匹配: {function_key} (filepath: {filepath})")
+        return None
+    
+    def _write_updated_csv(self, updated_data: Dict) -> bool:
+        """
+        寫入更新後的 CSV
+        """
+        try:
+            # 準備表頭
+            headers = ['檔案路徑', '函式名稱'] + \
+                     [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
+                     ['漏洞出現次數']
+            
+            with open(self.csv_path, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                
+                for function_key, function_data in updated_data.items():
+                    parts = function_key.split('::')
+                    if len(parts) != 2:
+                        continue
+                    
+                    filepath, function_name = parts
+                    row = [filepath, function_name]
+                    
+                    for round_num in range(1, self.total_rounds + 1):
+                        value = function_data.get(f'round{round_num}', '')
+                        row.append(value)
+                    
+                    row.append(function_data.get('漏洞出現次數', 0))
+                    writer.writerow(row)
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 寫入 CSV 時發生錯誤: {e}")
+            return False
+
+
+def initialize_non_as_mode_statistics(project_name: str, cwe_type: str,
+                                       total_rounds: int, function_list: List[str],
+                                       base_result_path: Path = None) -> NonASModeStatistics:
+    """
+    便捷函式：初始化非 AS Mode 的 query_statistics.csv
+    
+    Args:
+        project_name: 專案名稱
+        cwe_type: CWE 類型（如 "327"）
+        total_rounds: 總輪數
+        function_list: 函式列表（格式：["file.py_func()"]）
+        base_result_path: CWE_Result 基礎路徑（可選）
+        
+    Returns:
+        NonASModeStatistics: 統計器實例
+    """
+    generator = NonASModeStatistics(project_name, cwe_type, total_rounds,
+                                    function_list, base_result_path)
+    generator.initialize_csv()
+    return generator
 
 
 def initialize_query_statistics(project_name: str, cwe_type: str,

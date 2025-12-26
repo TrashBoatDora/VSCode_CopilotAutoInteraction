@@ -438,6 +438,7 @@ class UIManager:
         try:
             import shutil
             
+            from config.config import config
             script_root = Path(__file__).parent.parent
             
             print(f"\n🧹 開始清理 {len(project_names)} 個專案的執行記錄（不備份）...")
@@ -449,8 +450,8 @@ class UIManager:
             for project_name in project_names:
                 print(f"\n📂 清理專案: {project_name}")
                 
-                # 1. ExecutionResult/Success/{專案名稱}/
-                success_dir = script_root / "ExecutionResult" / "Success" / project_name
+                # 1. output/ExecutionResult/Success/{專案名稱}/
+                success_dir = config.EXECUTION_RESULT_DIR / "Success" / project_name
                 if success_dir.exists():
                     try:
                         # 計算大小
@@ -464,7 +465,7 @@ class UIManager:
                         print(f"  ⚠️  刪除執行結果失敗: {e}")
                 
                 # 2. AutomationLog
-                log_dir = script_root / "ExecutionResult" / "AutomationLog"
+                log_dir = config.EXECUTION_RESULT_DIR / "AutomationLog"
                 if log_dir.exists():
                     for log_file in log_dir.glob(f"{project_name}*.txt"):
                         try:
@@ -478,7 +479,7 @@ class UIManager:
                             print(f"  ⚠️  刪除日誌失敗: {log_file.name}: {e}")
                 
                 # 3. AutomationReport
-                report_dir = script_root / "ExecutionResult" / "AutomationReport"
+                report_dir = config.EXECUTION_RESULT_DIR / "AutomationReport"
                 if report_dir.exists():
                     for report_file in report_dir.glob(f"{project_name}*.json"):
                         try:
@@ -493,8 +494,8 @@ class UIManager:
                 
                 # 4. OriginalScanResult (原始掃描結果 - 完整專案目錄)
                 original_scan_dirs = [
-                    script_root / "OriginalScanResult" / "Bandit",
-                    script_root / "OriginalScanResult" / "Semgrep"
+                    config.ORIGINAL_SCAN_RESULT_DIR / "Bandit",
+                    config.ORIGINAL_SCAN_RESULT_DIR / "Semgrep"
                 ]
                 
                 for original_scan_dir in original_scan_dirs:
@@ -524,8 +525,8 @@ class UIManager:
                 
                 # 5. CWE 掃描結果（支援新的 Bandit/Semgrep 分離結構 - 完整專案目錄）
                 cwe_result_dirs = [
-                    script_root / "CWE_Result",
-                    script_root / "cwe_scan_results"
+                    config.CWE_RESULT_DIR,
+                    script_root / "cwe_scan_results"  # 舊格式（向後相容）
                 ]
                 
                 for cwe_dir in cwe_result_dirs:

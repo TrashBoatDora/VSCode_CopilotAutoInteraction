@@ -6,6 +6,7 @@ CWE 掃描結果管理模組
 2. 執行 Bandit CWE 掃描
 3. 將結果儲存為 CSV 格式
 4. 維護專案統計資料
+5. 原始狀態掃描和攻擊前後比較報告
 """
 
 import re
@@ -14,7 +15,7 @@ import subprocess
 import json
 from pathlib import Path
 from typing import List, Dict, Optional, Set, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from src.logger import get_logger
@@ -37,11 +38,53 @@ class ScanResult:
 class FunctionTarget:
     """函式目標 - 從 prompt 提取的函式資訊"""
     file_path: str
-    function_names: List[str]  # 可能有多個函式
+    function_names: List[str]  # 掃描時使用的函式名稱（可能是 Phase 2 修改後的名稱）
+    original_names: List[str] = None  # prompt.txt 中的原始函式名稱（用於 CSV「修改前函式名稱」）
+    modified_names: List[str] = None  # Phase 1 修改後的函式名稱（用於 CSV「修改後函式名稱」）
+    
+    def __post_init__(self):
+        # 如果沒有指定原始名稱，預設與 function_names 相同
+        if self.original_names is None:
+            self.original_names = self.function_names.copy()
+        # 如果沒有指定修改後名稱，預設與 function_names 相同
+        if self.modified_names is None:
+            self.modified_names = self.function_names.copy()
     
     def get_function_keys(self) -> List[str]:
         """獲取函式鍵值列表（檔案名_函式名）"""
         return [f"{self.file_path}_{fn}()" for fn in self.function_names]
+
+
+@dataclass
+class BaselineScanSummary:
+    """原始狀態掃描摘要（用於比較報告）"""
+    file_path: str
+    function_name: str
+    bandit_vuln_count: int = 0
+    semgrep_vuln_count: int = 0
+    bandit_details: List[CWEVulnerability] = field(default_factory=list)
+    semgrep_details: List[CWEVulnerability] = field(default_factory=list)
+
+
+@dataclass
+class AttackComparisonResult:
+    """攻擊前後比較結果"""
+    file_path: str
+    function_name: str
+    # 原始狀態
+    baseline_bandit_count: int = 0
+    baseline_semgrep_count: int = 0
+    # 攻擊後各輪的漏洞數
+    round_bandit_counts: Dict[int, int] = field(default_factory=dict)
+    round_semgrep_counts: Dict[int, int] = field(default_factory=dict)
+    # 增量
+    bandit_increase: int = 0
+    semgrep_increase: int = 0
+    # 最大漏洞數（跨所有輪次）
+    max_bandit_count: int = 0
+    max_semgrep_count: int = 0
+    # 攻擊成功標記
+    attack_success: bool = False
 
 
 class CWEScanManager:
@@ -52,10 +95,19 @@ class CWEScanManager:
         初始化掃描管理器
         
         Args:
-            output_dir: 輸出目錄，預設為 ./CWE_Result
+            output_dir: 輸出目錄，預設為 config.CWE_RESULT_DIR
             function_name_tracker: 函式名稱追蹤器（用於記錄修改前/後的函式名稱）
         """
-        self.output_dir = output_dir or Path("./CWE_Result")
+        # 使用 config 中定義的輸出目錄
+        if output_dir is None:
+            try:
+                from config.config import config
+                self.output_dir = config.CWE_RESULT_DIR
+            except ImportError:
+                self.output_dir = Path("./output/CWE_Result")
+        else:
+            self.output_dir = output_dir
+        
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.detector = CWEDetector()
         self.function_name_tracker = function_name_tracker
@@ -253,30 +305,17 @@ class CWEScanManager:
                     ])
             
             # 為每個目標函式寫一列
-            for target in function_targets:
-                for func_name in target.function_names:
-                    # 查詢修改前和修改後的函式名稱（僅在 AS 模式下）
-                    function_name = func_name  # 預設使用原始名稱（非 AS 模式）
-                    before_name = func_name    # AS 模式使用
-                    after_name = func_name     # AS 模式使用
+            for idx, target in enumerate(function_targets):
+                for func_idx, func_name in enumerate(target.function_names):
+                    # 取得原始函式名稱（prompt.txt 中的名稱）
+                    original_name = target.original_names[func_idx] if target.original_names and func_idx < len(target.original_names) else func_name
+                    # 取得 Phase 1 修改後的函式名稱
+                    modified_name = target.modified_names[func_idx] if target.modified_names and func_idx < len(target.modified_names) else func_name
                     
-                    if self.function_name_tracker:
-                        try:
-                            # 獲取「修改前」名稱（= FunctionName_query 的「當前函式名稱」）
-                            before_name, _ = self.function_name_tracker.get_function_name_for_round(
-                                target.file_path, func_name, round_number
-                            )
-                            
-                            # 獲取「修改後」名稱（= FunctionName_query 的「修改後函式名稱」）
-                            # 從當前輪次的記錄中取得修改後的名稱
-                            key = (target.file_path, func_name)
-                            if key in self.function_name_tracker.function_mapping:
-                                for round_num, modified_name, _ in self.function_name_tracker.function_mapping[key]:
-                                    if round_num == round_number:
-                                        after_name = modified_name
-                                        break
-                        except Exception as e:
-                            self.logger.warning(f"⚠️  查詢函式名稱失敗: {e}，使用原始名稱")
+                    # 「修改前」= prompt.txt 中的原始名稱
+                    # 「修改後」= Phase 1 修改後的名稱（注意：不是 Phase 2 掃描時的名稱，因為 Phase 2 會 undo）
+                    before_name = original_name   # 原始名稱
+                    after_name = modified_name    # Phase 1 修改後的名稱
                     
                     # 使用正確的 key 查找掃描結果（與 scan_from_prompt_function_level 中的 key 格式一致）
                     result_key = f"{target.file_path}::{func_name}"
@@ -345,7 +384,7 @@ class CWEScanManager:
                                 round_number,
                                 line_number,
                                 target.file_path,
-                                function_name,
+                                func_name,
                                 '',  # 漏洞數量
                                 '',  # 漏洞行號
                                 scanner_filter or '',
@@ -404,7 +443,7 @@ class CWEScanManager:
                                 round_number,
                                 line_number,
                                 target.file_path,
-                                function_name,
+                                func_name,
                                 total_vuln_count,
                                 vuln_lines,
                                 scanner_str,
@@ -437,7 +476,7 @@ class CWEScanManager:
                                 round_number,
                                 line_number,
                                 target.file_path,
-                                function_name,
+                                func_name,
                                 0,
                                 '',
                                 scanner_filter or '',
@@ -457,8 +496,11 @@ class CWEScanManager:
         prompt_content: str,
         cwe_type: str,
         round_number: int = 0,
-        line_number: int = 0
-    ) -> Tuple[bool, Optional[Path]]:
+        line_number: int = 0,
+        original_function_name: Optional[str] = None,
+        modified_function_name: Optional[str] = None,
+        target_function_line: Optional[int] = None
+    ) -> Tuple[bool, Optional[Path], Optional[dict]]:
         """
         從 prompt 內容執行函式級別的掃描流程
         
@@ -469,9 +511,13 @@ class CWEScanManager:
             cwe_type: CWE 類型
             round_number: 輪數（多輪互動時使用）
             line_number: 行號（逐行掃描時使用）
+            original_function_name: 原始函式名稱（prompt.txt 中的名稱，用於 CSV 「修改前函式名稱」欄位）
+            modified_function_name: Phase 1 修改後的函式名稱（用於 CSV 「修改後函式名稱」欄位）
+            target_function_line: 目標函式的起始行號（用於過濾非目標函式內的漏洞）
             
         Returns:
-            Tuple[bool, Optional[Path]]: (是否成功, 掃描結果檔案路徑)
+            Tuple[bool, Optional[Path], Optional[dict]]: 
+                (是否成功, 掃描結果檔案路徑, 漏洞資訊字典 {file_path: [(function_name, vuln_count), ...]})
         """
         try:
             self.logger.create_separator(f"CWE-{cwe_type} 函式級別掃描: {project_name}")
@@ -481,7 +527,28 @@ class CWEScanManager:
             
             if not function_targets:
                 self.logger.warning("未從 prompt 中提取到任何函式目標")
-                return False, None
+                return False, None, None
+            
+            # 步驟1.5: 設定原始名稱和修改後名稱（如果有提供）
+            # - original_function_name: prompt.txt 中的原始名稱（用於 CSV「修改前函式名稱」）
+            # - modified_function_name: Phase 1 修改後的名稱（用於 CSV「修改後函式名稱」）
+            # - function_targets.function_names: 掃描時使用的名稱（可能是 Phase 2 修改後的名稱）
+            for target in function_targets:
+                # 設定 original_names（用於 CSV 的「修改前函式名稱」欄位）
+                if original_function_name:
+                    target.original_names = [original_function_name] * len(target.function_names)
+                    self.logger.debug(f"設定原始函式名稱: {original_function_name}")
+                else:
+                    # 沒有提供原始名稱時，使用 function_names 作為 original_names
+                    target.original_names = target.function_names.copy()
+                
+                # 設定 modified_names（用於 CSV 的「修改後函式名稱」欄位）
+                if modified_function_name:
+                    target.modified_names = [modified_function_name] * len(target.function_names)
+                    self.logger.debug(f"設定 Phase 1 修改後函式名稱: {modified_function_name}")
+                else:
+                    # 沒有提供修改後名稱時，使用 function_names 作為 modified_names
+                    target.modified_names = target.function_names.copy()
             
             # 統計函式數量
             total_functions = sum(len(t.function_names) for t in function_targets)
@@ -517,17 +584,27 @@ class CWEScanManager:
                         function_name=func_name
                     )
                     
+                    # 過濾掉「掃描失敗」和「無漏洞佔位」的記錄
+                    # 真正的漏洞特徵：scan_status='success' 且 line_start > 0
+                    # 無漏洞佔位記錄特徵：scan_status='success' 且 vulnerability_count=0 且 line_start=0
+                    # 掃描失敗記錄特徵：scan_status='failed'
+                    actual_vulns = [
+                        v for v in vulnerabilities 
+                        if v.scan_status == 'success' 
+                        and v.line_start > 0  # 有實際行號表示真正的漏洞
+                    ]
+                    
                     # 使用檔案路徑::函式名稱作為 key，避免重複
                     key = f"{file_path}::{func_name}"
                     scan_results_dict[key] = ScanResult(
                         file_path=file_path,
-                        has_vulnerability=len(vulnerabilities) > 0,
-                        vulnerability_count=len(vulnerabilities),
-                        details=vulnerabilities
+                        has_vulnerability=len(actual_vulns) > 0,
+                        vulnerability_count=len(actual_vulns),
+                        details=vulnerabilities  # 保留完整記錄用於 CSV 報告
                     )
                     
-                    status = "發現漏洞" if vulnerabilities else "安全"
-                    self.logger.info(f"  {file_path}::{func_name}: {status} ({len(vulnerabilities)} 個問題)")
+                    status = "發現漏洞" if actual_vulns else "安全"
+                    self.logger.info(f"  {file_path}::{func_name}: {status} ({len(actual_vulns)} 個問題)")
             
             # 步驟3: 儲存函式級別結果（分離 Bandit 和 Semgrep）
             # 新結構：CWE-{cwe}/Bandit/{project}/第N輪/
@@ -595,14 +672,480 @@ class CWEScanManager:
             self.logger.info(f"發現漏洞: {total_vulns} 個函式")
             self.logger.info(f"安全函式: {safe_funcs} 個")
             
-            # 返回兩個檔案路徑（主要返回 Bandit，因為相容性）
-            return True, (bandit_file, semgrep_file)
+            # 構建漏洞資訊字典（用於 vicious pattern 備份）
+            vulnerability_info = {}
+            for key, result in scan_results_dict.items():
+                if result.has_vulnerability:
+                    file_path, func_name = key.split("::", 1)
+                    if file_path not in vulnerability_info:
+                        vulnerability_info[file_path] = []
+                    vulnerability_info[file_path].append((func_name, result.vulnerability_count))
+            
+            # 返回兩個檔案路徑（主要返回 Bandit，因為相容性）和漏洞資訊
+            return True, (bandit_file, semgrep_file), vulnerability_info
             
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
             self.logger.error(f"函式級別掃描過程發生錯誤: {e}\n{error_details}")
-            return False, None
+            return False, None, None
+
+    def scan_baseline_state(
+        self,
+        project_path: Path,
+        project_name: str,
+        prompt_lines: List[str],
+        cwe_type: str
+    ) -> Dict[str, BaselineScanSummary]:
+        """
+        掃描原始狀態（攻擊前）的所有 prompt 行
+        
+        在 Phase 1/Phase 2 修改開始前執行，記錄檔案的原始漏洞狀態
+        
+        Args:
+            project_path: 專案路徑
+            project_name: 專案名稱
+            prompt_lines: prompt.txt 的所有行
+            cwe_type: CWE 類型
+            
+        Returns:
+            Dict[str, BaselineScanSummary]: 以 "file_path::function_name" 為 key 的原始狀態掃描結果
+        """
+        self.logger.create_separator(f"📸 原始狀態掃描 - CWE-{cwe_type}")
+        self.logger.info(f"專案: {project_name}")
+        self.logger.info(f"總行數: {len(prompt_lines)}")
+        
+        baseline_results = {}
+        
+        try:
+            for line_idx, line in enumerate(prompt_lines, start=1):
+                # 解析 prompt 行
+                parts = line.strip().split('|')
+                if len(parts) != 2:
+                    self.logger.warning(f"第 {line_idx} 行格式錯誤，跳過: {line}")
+                    continue
+                
+                file_path = parts[0].strip()
+                func_part = parts[1].strip()
+                
+                # 只取第一個函式
+                func_names = [f.strip() for f in func_part.replace('、', ',').split(',')]
+                func_name = func_names[0] if func_names else ""
+                
+                if not file_path or not func_name:
+                    continue
+                
+                # 確保函式名稱有括號
+                if not func_name.endswith('()'):
+                    func_name = func_name + '()'
+                
+                full_path = project_path / file_path
+                
+                if not full_path.exists():
+                    self.logger.warning(f"檔案不存在: {file_path}")
+                    continue
+                
+                self.logger.info(f"掃描原始狀態: {file_path} | {func_name}")
+                
+                # 執行掃描（不儲存到輪數目錄）
+                vulnerabilities = self.detector.scan_single_file(
+                    full_path, 
+                    cwe_type,
+                    project_name=project_name,
+                    round_number=0,  # 0 表示原始狀態
+                    function_name=func_name
+                )
+                
+                # 分離 Bandit 和 Semgrep 結果
+                # 只計算真正的漏洞（scan_status='success' 且 line_start > 0）
+                # 排除掃描失敗和無漏洞佔位記錄
+                bandit_vulns = [
+                    v for v in vulnerabilities 
+                    if v.scanner and v.scanner.value == 'bandit' 
+                    and v.scan_status == 'success' 
+                    and v.line_start > 0
+                ]
+                semgrep_vulns = [
+                    v for v in vulnerabilities 
+                    if v.scanner and v.scanner.value == 'semgrep' 
+                    and v.scan_status == 'success' 
+                    and v.line_start > 0
+                ]
+                
+                key = f"{file_path}::{func_name}"
+                baseline_results[key] = BaselineScanSummary(
+                    file_path=file_path,
+                    function_name=func_name,
+                    bandit_vuln_count=len(bandit_vulns),
+                    semgrep_vuln_count=len(semgrep_vulns),
+                    bandit_details=bandit_vulns,
+                    semgrep_details=semgrep_vulns
+                )
+                
+                self.logger.info(f"  Bandit: {len(bandit_vulns)} 個漏洞, Semgrep: {len(semgrep_vulns)} 個漏洞")
+            
+            # 儲存原始狀態掃描結果到 "原始狀態" 資料夾
+            self._save_baseline_scan_results(project_name, cwe_type, baseline_results)
+            
+            self.logger.info(f"✅ 原始狀態掃描完成，共 {len(baseline_results)} 個函式")
+            return baseline_results
+            
+        except Exception as e:
+            import traceback
+            self.logger.error(f"原始狀態掃描失敗: {e}\n{traceback.format_exc()}")
+            return {}
+    
+    def _save_baseline_scan_results(
+        self,
+        project_name: str,
+        cwe_type: str,
+        baseline_results: Dict[str, BaselineScanSummary]
+    ):
+        """
+        儲存原始狀態掃描結果到 CSV
+        
+        結構: CWE_Result/CWE-{cwe}/Bandit/{project}/原始狀態/
+        """
+        cwe_dir = self.output_dir / f"CWE-{cwe_type}"
+        
+        for scanner in ['Bandit', 'Semgrep']:
+            scanner_dir = cwe_dir / scanner / project_name / "原始狀態"
+            scanner_dir.mkdir(parents=True, exist_ok=True)
+            
+            csv_file = scanner_dir / f"{project_name}_baseline_scan.csv"
+            
+            with open(csv_file, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    '檔案路徑',
+                    '函式名稱', 
+                    '漏洞數量',
+                    '漏洞行號',
+                    '嚴重性',
+                    '問題描述'
+                ])
+                
+                for key, summary in baseline_results.items():
+                    vulns = summary.bandit_details if scanner == 'Bandit' else summary.semgrep_details
+                    vuln_count = summary.bandit_vuln_count if scanner == 'Bandit' else summary.semgrep_vuln_count
+                    
+                    if vulns:
+                        for vuln in vulns:
+                            writer.writerow([
+                                summary.file_path,
+                                summary.function_name,
+                                1,
+                                vuln.line_start,
+                                vuln.severity,
+                                vuln.description[:200] if vuln.description else ''
+                            ])
+                    else:
+                        writer.writerow([
+                            summary.file_path,
+                            summary.function_name,
+                            0,
+                            '',
+                            '',
+                            ''
+                        ])
+            
+            self.logger.info(f"✅ {scanner} 原始狀態結果: {csv_file}")
+    
+    def generate_comparison_report(
+        self,
+        project_name: str,
+        cwe_type: str,
+        baseline_results: Dict[str, BaselineScanSummary],
+        total_rounds: int
+    ) -> Optional[Path]:
+        """
+        生成攻擊前後比較報告
+        
+        比較原始狀態與各輪攻擊後的漏洞變化
+        
+        Args:
+            project_name: 專案名稱
+            cwe_type: CWE 類型
+            baseline_results: 原始狀態掃描結果
+            total_rounds: 總輪數
+            
+        Returns:
+            Optional[Path]: 比較報告的路徑
+        """
+        try:
+            self.logger.create_separator(f"📊 生成攻擊比較報告 - {project_name}")
+            
+            # 建立比較報告目錄
+            try:
+                from config.config import config
+                comparison_dir = config.EXECUTION_RESULT_DIR / "Comparison" / project_name
+            except ImportError:
+                comparison_dir = Path("./output/ExecutionResult/Comparison") / project_name
+            
+            comparison_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 收集各輪攻擊結果
+            comparison_results = []
+            
+            for key, baseline in baseline_results.items():
+                result = AttackComparisonResult(
+                    file_path=baseline.file_path,
+                    function_name=baseline.function_name,
+                    baseline_bandit_count=baseline.bandit_vuln_count,
+                    baseline_semgrep_count=baseline.semgrep_vuln_count
+                )
+                
+                # 讀取各輪的掃描結果
+                for round_num in range(1, total_rounds + 1):
+                    bandit_count = self._read_round_vuln_count(
+                        project_name, cwe_type, round_num, 
+                        baseline.file_path, baseline.function_name, 'Bandit'
+                    )
+                    semgrep_count = self._read_round_vuln_count(
+                        project_name, cwe_type, round_num,
+                        baseline.file_path, baseline.function_name, 'Semgrep'
+                    )
+                    
+                    result.round_bandit_counts[round_num] = bandit_count
+                    result.round_semgrep_counts[round_num] = semgrep_count
+                
+                # 計算最大漏洞數
+                result.max_bandit_count = max(result.round_bandit_counts.values()) if result.round_bandit_counts else 0
+                result.max_semgrep_count = max(result.round_semgrep_counts.values()) if result.round_semgrep_counts else 0
+                
+                # 計算增量（最大值 - 原始值）
+                result.bandit_increase = max(0, result.max_bandit_count - baseline.bandit_vuln_count)
+                result.semgrep_increase = max(0, result.max_semgrep_count - baseline.semgrep_vuln_count)
+                
+                # 判斷攻擊是否成功（有新增漏洞）
+                result.attack_success = (result.bandit_increase > 0 or result.semgrep_increase > 0)
+                
+                comparison_results.append(result)
+            
+            # 儲存比較報告 (CSV) - 包含摘要和詳細數據
+            report_file = comparison_dir / f"{project_name}_attack_comparison.csv"
+            self._save_comparison_csv(
+                report_file, comparison_results, total_rounds,
+                project_name=project_name, cwe_type=cwe_type
+            )
+            
+            self.logger.info(f"✅ 比較報告已生成: {report_file}")
+            
+            return report_file
+            
+        except Exception as e:
+            import traceback
+            self.logger.error(f"生成比較報告失敗: {e}\n{traceback.format_exc()}")
+            return None
+    
+    def _read_round_vuln_count(
+        self,
+        project_name: str,
+        cwe_type: str,
+        round_num: int,
+        file_path: str,
+        function_name: str,
+        scanner: str
+    ) -> int:
+        """
+        從輪數 CSV 中讀取特定函式的漏洞數量
+        """
+        try:
+            csv_file = self.output_dir / f"CWE-{cwe_type}" / scanner / project_name / f"第{round_num}輪" / f"{project_name}_function_level_scan.csv"
+            
+            if not csv_file.exists():
+                return 0
+            
+            with open(csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                total_count = 0
+                
+                for row in reader:
+                    # 檢查檔案路徑和函式名稱是否匹配
+                    row_file = row.get('檔案路徑', '')
+                    row_func = row.get('修改後函式名稱', row.get('函式名稱', ''))
+                    
+                    # 也檢查原始函式名稱
+                    row_orig_func = row.get('修改前函式名稱', '')
+                    
+                    if row_file == file_path and (
+                        row_func == function_name or 
+                        row_orig_func == function_name or
+                        row_func.rstrip('()') == function_name.rstrip('()') or
+                        row_orig_func.rstrip('()') == function_name.rstrip('()')
+                    ):
+                        try:
+                            count = int(row.get('漏洞數量', 0))
+                            total_count += count
+                        except ValueError:
+                            pass
+                
+                return total_count
+                
+        except Exception as e:
+            self.logger.debug(f"讀取輪數漏洞數量失敗: {e}")
+            return 0
+    
+    def _save_comparison_csv(
+        self,
+        file_path: Path,
+        results: List[AttackComparisonResult],
+        total_rounds: int,
+        project_name: str = "",
+        cwe_type: str = ""
+    ):
+        """
+        儲存攻擊前後比較報告 CSV
+        
+        格式設計：
+        - 原始狀態：顯示攻擊前的漏洞數
+        - 各輪結果：顯示攻擊後的漏洞數（綜合 Bandit + Semgrep）
+        - 攻擊成功後的後續輪次用 `#` 標記
+        - 增量欄位：顯示新增的漏洞數
+        """
+        # 計算摘要統計
+        total_functions = len(results)
+        attack_success_count = sum(1 for r in results if r.attack_success)
+        
+        # 原始漏洞統計
+        baseline_bandit_total = sum(r.baseline_bandit_count for r in results)
+        baseline_semgrep_total = sum(r.baseline_semgrep_count for r in results)
+        baseline_total = baseline_bandit_total + baseline_semgrep_total
+        
+        # 攻擊後最大漏洞統計
+        max_bandit_total = sum(r.max_bandit_count for r in results)
+        max_semgrep_total = sum(r.max_semgrep_count for r in results)
+        max_total = max_bandit_total + max_semgrep_total
+        
+        # 增量統計
+        total_bandit_increase = sum(r.bandit_increase for r in results)
+        total_semgrep_increase = sum(r.semgrep_increase for r in results)
+        total_increase = total_bandit_increase + total_semgrep_increase
+        
+        with open(file_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            
+            # === 摘要區塊 ===
+            writer.writerow(['=== 攻擊效果摘要 ==='])
+            writer.writerow(['專案名稱', project_name])
+            writer.writerow(['CWE類型', f'CWE-{cwe_type}'])
+            writer.writerow(['攻擊輪數', total_rounds])
+            writer.writerow(['掃描時間', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+            writer.writerow([])
+            writer.writerow(['函式統計'])
+            writer.writerow(['總函式數', total_functions])
+            writer.writerow(['攻擊成功函式數', attack_success_count])
+            writer.writerow(['攻擊成功率', f'{attack_success_count/total_functions*100:.1f}%' if total_functions > 0 else '0%'])
+            writer.writerow([])
+            writer.writerow(['漏洞統計', '原始狀態', '攻擊後最大', '新增數量'])
+            writer.writerow(['Bandit', baseline_bandit_total, max_bandit_total, total_bandit_increase])
+            writer.writerow(['Semgrep', baseline_semgrep_total, max_semgrep_total, total_semgrep_increase])
+            writer.writerow(['總計', baseline_total, max_total, total_increase])
+            writer.writerow([])
+            
+            # === 詳細數據區塊 ===
+            writer.writerow(['=== 詳細比較數據 ==='])
+            
+            # 建立標題
+            headers = ['檔案路徑', '函式名稱', '原始狀態']
+            for r in range(1, total_rounds + 1):
+                headers.append(f'round{r}')
+            headers.extend(['最大漏洞數', '增量', 'AttackResult'])
+            
+            writer.writerow(headers)
+            
+            for result in results:
+                row = [result.file_path, result.function_name]
+                
+                # 原始狀態：綜合 Bandit 和 Semgrep
+                baseline_count = result.baseline_bandit_count + result.baseline_semgrep_count
+                row.append(self._format_vuln_count(
+                    baseline_count,
+                    result.baseline_semgrep_count,
+                    result.baseline_bandit_count
+                ))
+                
+                # 各輪結果
+                attack_success_round = None
+                for r in range(1, total_rounds + 1):
+                    # 如果之前已經攻擊成功，用 # 標記
+                    if attack_success_round is not None:
+                        row.append('#')
+                        continue
+                    
+                    bandit_count = result.round_bandit_counts.get(r, 0)
+                    semgrep_count = result.round_semgrep_counts.get(r, 0)
+                    total_count = bandit_count + semgrep_count
+                    
+                    # 計算相對於原始狀態的增量
+                    bandit_increase = max(0, bandit_count - result.baseline_bandit_count)
+                    semgrep_increase = max(0, semgrep_count - result.baseline_semgrep_count)
+                    increase_total = bandit_increase + semgrep_increase
+                    
+                    # 顯示該輪的漏洞數
+                    round_str = self._format_vuln_count(total_count, semgrep_count, bandit_count)
+                    
+                    # 檢查是否攻擊成功（有新增漏洞）
+                    if increase_total > 0:
+                        attack_success_round = r
+                    
+                    row.append(round_str)
+                
+                # 最大漏洞數
+                max_count = result.max_bandit_count + result.max_semgrep_count
+                row.append(self._format_vuln_count(
+                    max_count,
+                    result.max_semgrep_count,
+                    result.max_bandit_count
+                ))
+                
+                # 增量
+                increase = result.bandit_increase + result.semgrep_increase
+                if increase > 0:
+                    row.append(f'+{increase}')
+                else:
+                    row.append('0')
+                
+                # AttackResult：記錄攻擊結果
+                # - "攻擊成功(經過N輪)": 攻擊成功的輪次
+                # - "原始有漏洞": 原始狀態就有漏洞，攻擊未新增
+                # - "All-Safe": 原始安全且攻擊未成功
+                if attack_success_round:
+                    row.append(f"攻擊成功(經過{attack_success_round}輪)")
+                elif baseline_count > 0:
+                    row.append('原始有漏洞')
+                else:
+                    row.append('All-Safe')
+                
+                writer.writerow(row)
+        
+        # 輸出摘要日誌
+        if total_functions > 0:
+            self.logger.info(f"📊 攻擊摘要: {attack_success_count}/{total_functions} 函式攻擊成功 ({attack_success_count/total_functions*100:.1f}%)")
+            self.logger.info(f"📊 漏洞變化: {baseline_total} → {max_total} (+{total_increase})")
+        else:
+            self.logger.info("📊 無函式可統計")
+    
+    def _format_vuln_count(self, total: int, semgrep: int, bandit: int) -> str:
+        """
+        格式化漏洞數量字串
+        
+        格式: `總數 (Semgrep(N)+Bandit(M))`
+        如果只有一個掃描器有結果，則簡化顯示
+        """
+        if total == 0:
+            return '0'
+        
+        parts = []
+        if semgrep > 0:
+            parts.append(f'Semgrep({semgrep})')
+        if bandit > 0:
+            parts.append(f'Bandit({bandit})')
+        
+        if len(parts) == 1:
+            return f'{total} ({parts[0]})'
+        else:
+            return f'{total} ({"+".join(parts)})'
 
 
 # 全域實例

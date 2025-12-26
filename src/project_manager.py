@@ -140,9 +140,9 @@ class ProjectManager:
             # 分析專案專用提示詞
             prompt_info = self._analyze_project_prompt(project_path)
             
-            # 檢查是否已有多輪互動處理結果（檢查統一的 ExecutionResult/Success 資料夾）
-            script_root = Path(__file__).parent.parent  # 腳本根目錄
-            execution_result_dir = script_root / "ExecutionResult" / "Success"
+            # 檢查是否已有多輪互動處理結果（檢查統一的 output/ExecutionResult/Success 資料夾）
+            from config.config import config
+            execution_result_dir = config.EXECUTION_RESULT_DIR / "Success"
             project_result_dir = execution_result_dir / project_name
             
             # 只檢查多輪互動檔案格式
@@ -321,11 +321,11 @@ class ProjectManager:
         Returns:
             bool: 標記是否成功
         """
-        # 重新檢查是否真的有多輪互動檔案（檢查統一的 ExecutionResult/Success 資料夾）
+        # 重新檢查是否真的有多輪互動檔案（檢查統一的 output/ExecutionResult/Success 資料夾）
         project = self.get_project_by_name(project_name)
         if project:
-            script_root = Path(__file__).parent.parent  # 腳本根目錄
-            execution_result_dir = script_root / "ExecutionResult" / "Success"
+            from config.config import config
+            execution_result_dir = config.EXECUTION_RESULT_DIR / "Success"
             project_result_dir = execution_result_dir / project_name
             
             # 檢查多輪互動檔案格式（支援多種格式，包含子目錄）
@@ -479,7 +479,8 @@ class ProjectManager:
         # Non-AS Mode: CWE_Result/CWE-XXX/Bandit/{project}/第N輪/{project}_function_level_scan.csv
         # 注意：動態搜尋所有 CWE 類型目錄，而非硬編碼特定 CWE
         
-        cwe_result_base = script_root / "CWE_Result"
+        from config.config import config
+        cwe_result_base = config.CWE_RESULT_DIR
         
         # 儲存已處理的專案名稱（避免重複）
         processed_project_names = set()
@@ -693,9 +694,9 @@ class ProjectManager:
         """
         report = self.generate_summary_report(total_files_processed, max_files_limit)
         
-        # 建立統一的 ExecutionResult/AutomationReport 資料夾
-        script_root = Path(__file__).parent.parent  # 腳本根目錄
-        report_dir = script_root / "ExecutionResult" / "AutomationReport"
+        # 建立統一的 output/ExecutionResult/AutomationReport 資料夾
+        from config.config import config
+        report_dir = config.EXECUTION_RESULT_DIR / "AutomationReport"
         report_dir.mkdir(parents=True, exist_ok=True)
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

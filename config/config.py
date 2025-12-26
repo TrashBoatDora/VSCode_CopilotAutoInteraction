@@ -17,6 +17,14 @@ class Config:
     ASSETS_DIR = PROJECT_ROOT / "assets"
     PROJECTS_DIR = PROJECT_ROOT / "projects"
     
+    # ==================== 輸出目錄設定 ====================
+    # 統一輸出目錄（所有結果都放在這裡）
+    OUTPUT_BASE_DIR = PROJECT_ROOT / "output"
+    EXECUTION_RESULT_DIR = OUTPUT_BASE_DIR / "ExecutionResult"
+    ORIGINAL_SCAN_RESULT_DIR = OUTPUT_BASE_DIR / "OriginalScanResult"
+    CWE_RESULT_DIR = OUTPUT_BASE_DIR / "CWE_Result"
+    VICIOUS_PATTERN_DIR = OUTPUT_BASE_DIR / "vicious_pattern"
+    
     # ==================== 提示詞檔案路徑 ====================
     PROMPTS_DIR = PROJECT_ROOT / "prompts"
     PROMPT1_FILE_PATH = PROMPTS_DIR / "prompt1.txt"  # 第一輪互動使用

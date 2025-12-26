@@ -32,6 +32,7 @@ try:
         is_response_incomplete,
         wait_and_retry
     )
+    from src.query_statistics import initialize_non_as_mode_statistics
 except ImportError:
     from logger import get_logger
     from image_recognition import image_recognition
@@ -39,6 +40,7 @@ except ImportError:
         is_response_incomplete,
         wait_and_retry
     )
+    from query_statistics import initialize_non_as_mode_statistics
 
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
@@ -64,6 +66,7 @@ class CopilotHandler:
         self.cwe_scan_manager = cwe_scan_manager  # CWE 掃描管理器
         self.cwe_scan_settings = cwe_scan_settings  # CWE 掃描設定
         self._clipboard_lock = False  # 剪貼簿鎖定狀態，避免併發衝突
+        self.query_stats = None  # 查詢統計器（用於非 AS Mode 的統計）
         
         self.logger.info("Copilot Chat 處理器初始化完成")
         if cwe_scan_manager and cwe_scan_settings and cwe_scan_settings.get("enabled"):
@@ -331,9 +334,47 @@ class CopilotHandler:
             self.logger.error(f"載入專案提示詞失敗: {str(e)}")
             return []
     
+    def _parse_prompt_line_for_stats(self, prompt_line: str) -> tuple:
+        """
+        解析 prompt.txt 的單行用於統計
+        格式: filepath|function1()、function2()、function3()（多個函數用中文頓號分隔）
+        只取第一個函數
+        
+        Args:
+            prompt_line: prompt 行內容
+            
+        Returns:
+            (filepath, first_function_name)
+        """
+        parts = prompt_line.strip().split('|')
+        if len(parts) != 2:
+            self.logger.debug(f"Prompt 格式錯誤（應為 filepath|function_name）: {prompt_line}")
+            return ("", "")
+        
+        filepath = parts[0].strip()
+        functions_part = parts[1].strip()
+        
+        # 分隔多個函數（使用中文頓號「、」）
+        functions = []
+        if '、' in functions_part:
+            functions = [f.strip() for f in functions_part.split('、')]
+        else:
+            functions = [functions_part]
+        
+        # 取第一個函數
+        first_function = functions[0].strip()
+        
+        # 確保函數名稱包含括號（如果沒有則添加）
+        if not first_function.endswith('()'):
+            first_function = first_function + '()'
+        
+        self.logger.debug(f"解析 prompt 統計: {filepath} | {first_function}")
+        
+        return (filepath, first_function)
+    
     def send_single_prompt_line(self, prompt_line: str, line_number: int, total_lines: int) -> bool:
         """
-        發送單行提示詞到 Copilot Chat（假設輸入框已聚焦）
+        發送單行提示詞到 Copilot Chat（假設輸入框已聯焦）
         
         Args:
             prompt_line: 單行提示詞內容
@@ -700,9 +741,14 @@ class CopilotHandler:
             project_dir = Path(project_path)
             project_name = project_dir.name
             
-            # 建立統一的 ExecutionResult 資料夾結構（在腳本根目錄）
-            script_root = Path(__file__).parent.parent  # 腳本根目錄
-            execution_result_dir = script_root / "ExecutionResult"
+            # 使用 config 中定義的統一輸出目錄
+            try:
+                from config.config import config
+                execution_result_dir = config.EXECUTION_RESULT_DIR
+            except ImportError:
+                script_root = Path(__file__).parent.parent
+                execution_result_dir = script_root / "output" / "ExecutionResult"
+            
             result_subdir = execution_result_dir / ("Success" if is_success else "Fail")
             
             # 建立專案專屬資料夾
@@ -1128,6 +1174,26 @@ class CopilotHandler:
             total_lines = len(prompt_lines)
             self.logger.info(f"專案 {project_name} 有 {total_lines} 行提示詞，每輪將發送 {min(total_lines, max_lines) if max_lines else total_lines} 次")
             
+            # 初始化 Query 統計（如果啟用 CWE 掃描）- 使用非 AS Mode 版本
+            if self.cwe_scan_manager and self.cwe_scan_settings and self.cwe_scan_settings.get("enabled"):
+                cwe_type = self.cwe_scan_settings.get("cwe_type", "")
+                if cwe_type:
+                    self.logger.info("📊 初始化非 AS Mode 統計...")
+                    # 解析 prompt lines 建立 function_list
+                    function_list = []
+                    for line in prompt_lines:
+                        filepath, first_function = self._parse_prompt_line_for_stats(line)
+                        if filepath and first_function:
+                            function_list.append(f"{filepath}_{first_function}")
+                    
+                    self.query_stats = initialize_non_as_mode_statistics(
+                        project_name=project_name,
+                        cwe_type=cwe_type,
+                        total_rounds=max_rounds,
+                        function_list=function_list
+                    )
+                    self.logger.info(f"✅ 非 AS Mode 統計初始化完成 ({len(function_list)} 個函式)")
+            
             # 追蹤每一輪的成功狀態
             overall_success = True
             first_round_successful_lines = 0  # 只記錄第一輪的處理行數
@@ -1166,6 +1232,11 @@ class CopilotHandler:
                     self.logger.error(f"❌ 第 {round_num} 輪互動失敗")
                 
                 total_failed_lines.extend(failed_lines)
+                
+                # 即時更新該輪的 Query 統計資料
+                if self.query_stats:
+                    self.logger.info(f"📊 更新第 {round_num} 輪統計...")
+                    self.query_stats.update_round_result(round_num)
                 
                 # 輪次間暫停
                 if round_num < max_rounds:
@@ -1342,8 +1413,14 @@ class CopilotHandler:
         """
         try:
             project_name = Path(project_path).name
-            script_root = Path(__file__).parent.parent
-            execution_result_dir = script_root / "ExecutionResult" / "Success" / project_name
+            
+            # 使用 config 中定義的統一輸出目錄
+            try:
+                from config.config import config
+                execution_result_dir = config.EXECUTION_RESULT_DIR / "Success" / project_name
+            except ImportError:
+                script_root = Path(__file__).parent.parent
+                execution_result_dir = script_root / "output" / "ExecutionResult" / "Success" / project_name
             
             # 尋找該輪次的檔案（使用萬用字元匹配時間戳記）
             pattern = f"*_第{round_number}輪.md"
@@ -1386,8 +1463,14 @@ class CopilotHandler:
         """
         try:
             project_name = Path(project_path).name
-            script_root = Path(__file__).parent.parent  # 腳本根目錄
-            project_result_dir = script_root / "ExecutionResult" / "Success" / project_name
+            
+            # 使用 config 中定義的統一輸出目錄
+            try:
+                from config.config import config
+                project_result_dir = config.EXECUTION_RESULT_DIR / "Success" / project_name
+            except ImportError:
+                script_root = Path(__file__).parent.parent
+                project_result_dir = script_root / "output" / "ExecutionResult" / "Success" / project_name
             
             if not project_result_dir.exists():
                 return None
@@ -1657,8 +1740,8 @@ class CopilotHandler:
             
             self.logger.debug(f"開始 CWE-{cwe_type} 函式級別掃描: 第 {round_number} 輪 / 第 {line_number} 行")
             
-            # 使用函式級別掃描
-            success, result_file = self.cwe_scan_manager.scan_from_prompt_function_level(
+            # 使用函式級別掃描（返回值增加了 vuln_info）
+            success, result_file, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
                 project_path=Path(project_path),
                 project_name=project_name,
                 prompt_content=prompt_line,

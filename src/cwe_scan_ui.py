@@ -217,11 +217,18 @@ class CWEScanSettingsUI:
         )
         info_label.grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
         
-        # 輸出目錄
+        # 輸出目錄 - 使用 config 中的路徑
         output_label = ttk.Label(main_frame, text="掃描結果輸出目錄:")
         output_label.grid(row=6, column=0, columnspan=2, sticky=tk.W, pady=(15, 5))
         
-        self.output_dir_var = tk.StringVar(value="./CWE_Result")
+        # 從 config 獲取預設輸出目錄
+        try:
+            from config.config import config
+            default_output_dir = str(config.CWE_RESULT_DIR)
+        except ImportError:
+            default_output_dir = "./output/CWE_Result"
+        
+        self.output_dir_var = tk.StringVar(value=default_output_dir)
         output_entry = ttk.Entry(main_frame, textvariable=self.output_dir_var, width=60)
         output_entry.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
@@ -313,7 +320,11 @@ class CWEScanSettingsUI:
         # 取得輸出目錄
         output_dir = self.output_dir_var.get().strip()
         if not output_dir:
-            output_dir = "./CWE_Result"
+            try:
+                from config.config import config
+                output_dir = str(config.CWE_RESULT_DIR)
+            except ImportError:
+                output_dir = "./output/CWE_Result"
         
         # 建立結果
         self.result = {
@@ -350,10 +361,16 @@ def show_cwe_scan_settings(default_settings: Dict = None) -> Optional[Dict]:
 # 測試用主函數
 if __name__ == "__main__":
     # 測試預設值
+    try:
+        from config.config import config
+        default_output_dir = str(config.CWE_RESULT_DIR)
+    except ImportError:
+        default_output_dir = "./output/CWE_Result"
+    
     default = {
         "enabled": True,
         "cwe_type": "022",
-        "output_dir": "./CWE_Result"
+        "output_dir": default_output_dir
     }
     
     result = show_cwe_scan_settings(default)

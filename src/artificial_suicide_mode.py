@@ -6,7 +6,7 @@ Artificial Suicide 攻擊模式 - 輕量級控制器
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 import time
 import pyautogui
 
@@ -14,6 +14,7 @@ from src.logger import get_logger
 from src.copilot_rate_limit_handler import is_response_incomplete, wait_and_retry
 from src.query_statistics import initialize_query_statistics
 from src.function_name_tracker import create_function_name_tracker
+from src.vicious_pattern_manager import create_vicious_pattern_manager, ViciousPatternManager
 from config.config import config
 
 
@@ -89,6 +90,13 @@ class ArtificialSuicideMode:
         
         # 函式名稱追蹤器
         self.function_name_tracker = None
+        
+        # Vicious Pattern Manager（漏洞 Pattern 備份管理器）
+        self.vicious_pattern_manager: Optional[ViciousPatternManager] = None
+        
+        # 當前輪次發現漏洞的函式清單（用於 Phase 2 結束後備份）
+        # 結構: [(file_path, function_name, round_number, vulnerability_count, scanner), ...]
+        self.current_round_vulnerabilities: List[Tuple[str, str, int, int, str]] = []
         
         self.logger.info(f"✅ AS 模式初始化完成 - CWE-{target_cwe}, {total_rounds} 輪, {len(self.prompt_lines)} 行")
     
@@ -328,6 +336,29 @@ class ArtificialSuicideMode:
                 self.cwe_scan_manager.function_name_tracker = self.function_name_tracker
                 self.logger.info("✅ 已將 function_name_tracker 傳遞給 CWE 掃描管理器")
             
+            # 步驟 0.7：初始化 Vicious Pattern Manager（漏洞 Pattern 備份管理器）
+            self.logger.info("📦 初始化漏洞 Pattern 備份管理器...")
+            self.vicious_pattern_manager = create_vicious_pattern_manager(
+                project_name=self.project_path.name,
+                project_path=self.project_path,
+                cwe_type=self.target_cwe
+            )
+            
+            # 步驟 0.8：執行原始狀態掃描（攻擊前基線掃描）
+            baseline_results = {}
+            if self.cwe_scan_manager:
+                self.logger.info("📸 執行原始狀態掃描（攻擊前基線）...")
+                baseline_results = self.cwe_scan_manager.scan_baseline_state(
+                    project_path=self.project_path,
+                    project_name=self.project_path.name,
+                    prompt_lines=self.prompt_lines,
+                    cwe_type=self.target_cwe
+                )
+                self.baseline_results = baseline_results  # 儲存以供後續比較報告使用
+            else:
+                self.logger.warning("⚠️  未設置 CWE 掃描管理器，跳過原始狀態掃描")
+                self.baseline_results = {}
+            
             # 執行每一輪
             for round_num in range(1, self.total_rounds + 1):
                 self.logger.create_separator(f"📍 第 {round_num}/{self.total_rounds} 輪")
@@ -336,6 +367,8 @@ class ArtificialSuicideMode:
                 
                 if not success:
                     self.logger.error(f"❌ 第 {round_num} 輪執行失敗")
+                    # 即使失敗，也嘗試生成比較報告
+                    self._generate_comparison_report_if_available()
                     return False, self.files_processed_in_project
                 
                 # 即時更新該輪的統計資料
@@ -344,6 +377,15 @@ class ArtificialSuicideMode:
                 
                 self.logger.info(f"✅ 第 {round_num} 輪完成")
             
+            # 完成漏洞 Pattern 備份並生成 prompt.txt
+            if self.vicious_pattern_manager and self.vicious_pattern_manager.has_vulnerability():
+                self.vicious_pattern_manager.finalize()
+            else:
+                self.logger.info("📦 本專案未發現任何漏洞，不進行 Pattern 備份")
+            
+            # 生成攻擊前後比較報告
+            self._generate_comparison_report_if_available()
+            
             # files_processed_in_project 已在開始時設置，無需重複設置
             self.logger.create_separator("🎉 Artificial Suicide 攻擊完成")
             self.logger.info(f"📊 本專案處理了 {self.files_processed_in_project} 個檔案")
@@ -351,7 +393,23 @@ class ArtificialSuicideMode:
             
         except Exception as e:
             self.logger.error(f"❌ AS 模式執行錯誤: {e}")
+            # 即使出錯，也嘗試生成比較報告
+            self._generate_comparison_report_if_available()
             return False, self.files_processed_in_project
+    
+    def _generate_comparison_report_if_available(self):
+        """生成攻擊前後比較報告（如果有原始狀態掃描結果）"""
+        if hasattr(self, 'baseline_results') and self.baseline_results and self.cwe_scan_manager:
+            self.logger.info("📊 生成攻擊前後比較報告...")
+            try:
+                self.cwe_scan_manager.generate_comparison_report(
+                    project_name=self.project_path.name,
+                    cwe_type=self.target_cwe,
+                    baseline_results=self.baseline_results,
+                    total_rounds=self.total_rounds
+                )
+            except Exception as e:
+                self.logger.error(f"❌ 生成比較報告失敗: {e}")
     
     def _execute_round(self, round_num: int) -> bool:
         """
@@ -384,6 +442,20 @@ class ArtificialSuicideMode:
         self.logger.info("  ↩️  Undo 修改...")
         self.vscode_controller.clear_copilot_memory(modification_action="revert")
         time.sleep(2)
+        
+        # === 備份 Vicious Pattern（在 undo 之後）===
+        # 此時檔案已恢復到 Phase 1 修改後的狀態（變數名稱已修改但沒有漏洞程式碼）
+        # 這些「有毒模式」是成功引誘 Copilot 產生漏洞的模式
+        if self.vicious_pattern_manager and self.vicious_pattern_manager.has_vulnerability():
+            self.logger.info(f"  📦 備份 Vicious Pattern（第 {round_num} 輪）...")
+            try:
+                backup_count = self.vicious_pattern_manager.backup_round_patterns(round_num)
+                if backup_count > 0:
+                    self.logger.info(f"  ✅ 已備份 {backup_count} 個含有毒模式的檔案")
+                else:
+                    self.logger.info(f"  ℹ️  本輪無需備份的檔案")
+            except Exception as e:
+                self.logger.error(f"  ❌ 備份 Vicious Pattern 時發生錯誤: {e}")
         
         return True
     
@@ -422,19 +494,29 @@ class ArtificialSuicideMode:
                     successful_lines += 1
                     continue
                 
-                # === 步驟 1：找出原始函式所在行號（僅第 1 輪需要）===
-                original_line_number = None
-                if round_num == 1 and self.function_name_tracker:
-                    self.logger.info(f"  🔍 搜尋原始函式 {target_function_name} 的行號...")
-                    original_line_number = self.function_name_tracker.find_original_function_line(
-                        filepath=target_file,
-                        original_name=target_function_name,
-                        project_path=self.project_path
-                    )
-                    if original_line_number:
-                        self.logger.info(f"  ✅ 找到原始函式在第 {original_line_number} 行")
+                # === 步驟 1：找出 Phase 1 開始前的函式行號 ===
+                # 第 1 輪：搜尋原始檔案中的函式位置
+                # 第 2+ 輪：使用上一輪 Phase 1 結束後記錄的行號
+                pre_phase1_line_number = None
+                if self.function_name_tracker:
+                    if round_num == 1:
+                        self.logger.info(f"  🔍 搜尋原始函式 {target_function_name} 的行號...")
+                        pre_phase1_line_number = self.function_name_tracker.find_original_function_line(
+                            filepath=target_file,
+                            original_name=target_function_name,
+                            project_path=self.project_path
+                        )
+                        if pre_phase1_line_number:
+                            self.logger.info(f"  ✅ 找到原始函式在第 {pre_phase1_line_number} 行")
+                        else:
+                            self.logger.warning(f"  ⚠️  未找到原始函式行號，將使用函式名稱匹配")
                     else:
-                        self.logger.warning(f"  ⚠️  未找到原始函式行號，將使用函式名稱匹配")
+                        # 第 2+ 輪：取得上一輪 Phase 1 結束後的行號
+                        _, prev_line = self.function_name_tracker.get_function_name_for_round(
+                            target_file, target_function_name, round_num - 1
+                        )
+                        pre_phase1_line_number = prev_line
+                        self.logger.debug(f"  📍 第 {round_num} 輪使用上一輪的行號：{pre_phase1_line_number}")
                 
                 retry_count = 0
                 line_success = False
@@ -563,25 +645,16 @@ class ArtificialSuicideMode:
                             # 儲存回應供下一輪使用
                             self.round_responses[round_num][line_idx] = response
                             
-                            # === 步驟 2：提取修改後的函式名稱（使用行號定位）===
+                            # === 步驟 2：提取 Phase 1 結束後的函式名稱（使用行號定位）===
                             if self.function_name_tracker:
                                 self.logger.info(f"  📝 提取修改後的函式名稱...")
                                 
-                                # 取得行號（優先使用已知的行號，否則重新搜尋）
-                                if original_line_number:
-                                    line_to_check = original_line_number
-                                else:
-                                    # 嘗試從追蹤器中取得上一輪的行號
-                                    if round_num > 1:
-                                        _, prev_line = self.function_name_tracker.get_function_name_for_round(
-                                            target_file, target_function_name, round_num
-                                        )
-                                        line_to_check = prev_line if prev_line else None
-                                    else:
-                                        line_to_check = None
+                                # 使用 Phase 1 開始前的行號作為搜尋起點
+                                line_to_check = pre_phase1_line_number
                                 
-                                # 如果還是沒有行號，重新搜尋
+                                # 如果沒有行號，嘗試重新搜尋（可能因為上一輪追蹤失敗）
                                 if not line_to_check:
+                                    self.logger.debug(f"  🔍 無已知行號，重新搜尋函式位置...")
                                     line_to_check = self.function_name_tracker.find_original_function_line(
                                         filepath=target_file,
                                         original_name=target_function_name,
@@ -589,7 +662,7 @@ class ArtificialSuicideMode:
                                     )
                                 
                                 if line_to_check:
-                                    # 根據行號提取新函式名稱
+                                    # 根據行號提取新函式名稱（會在 ±3 行範圍內搜尋）
                                     result = self.function_name_tracker.extract_modified_function_name_by_line(
                                         filepath=target_file,
                                         original_name=target_function_name,
@@ -600,14 +673,17 @@ class ArtificialSuicideMode:
                                     if result:
                                         modified_name, modified_line = result
                                         
-                                        # 記錄函式名稱變更
+                                        # 記錄函式名稱變更 (Phase 1 = Query)
+                                        # original_line: Phase 1 開始前的行號（第 1 輪是原始行號，第 2+ 輪是上一輪結束後的行號）
+                                        # modified_line: Phase 1 結束後的行號
                                         self.function_name_tracker.record_function_change(
                                             filepath=target_file,
                                             original_name=target_function_name,
                                             modified_name=modified_name,
                                             round_num=round_num,
-                                            original_line=original_line_number,
-                                            modified_line=modified_line
+                                            original_line=pre_phase1_line_number if round_num == 1 else None,  # 只有第 1 輪記錄原始行號
+                                            modified_line=modified_line,
+                                            phase_number=1  # Phase 1 = Query
                                         )
                                         
                                         if modified_name != target_function_name:
@@ -615,7 +691,7 @@ class ArtificialSuicideMode:
                                         else:
                                             self.logger.debug(f"  ℹ️  函式名稱未變更：{target_function_name}（行 {modified_line}）")
                                     else:
-                                        self.logger.warning(f"  ⚠️  無法提取函式名稱（第 {line_to_check} 行）")
+                                        self.logger.warning(f"  ⚠️  無法提取函式名稱（第 {line_to_check} 行附近）")
                                 else:
                                     self.logger.warning(f"  ⚠️  無法定位函式行號，跳過名稱追蹤")
                             
@@ -819,27 +895,88 @@ class ArtificialSuicideMode:
                             failed_lines.append(line_idx)
                             break
                         
-                        # === CWE 掃描 ===
+                        # === CWE 掃描 + Phase 2 函式名稱追蹤 ===
                         self.logger.info(f"  🔍 開始掃描第 {line_idx} 行的函式")
+                        
+                        # === Phase 2 函式名稱追蹤（無論名稱是否變更都要記錄）===
+                        actual_function_name = current_function_name  # 預設使用 Phase 1 結束後的名稱
+                        actual_line_number = None
+                        pre_phase2_line = None  # Phase 2 開始前的行號（= Phase 1 結束後的行號）
+                        
+                        if self.function_name_tracker:
+                            # 取得 Phase 1 結束後的行號（= Phase 2 開始前）
+                            _, pre_phase2_line = self.function_name_tracker.get_function_name_for_round(
+                                target_file, target_function_name, round_num
+                            )
+                            
+                            if pre_phase2_line:
+                                # 從檔案中讀取 Phase 2 結束後的函式名稱
+                                result = self.function_name_tracker.extract_modified_function_name_by_line(
+                                    filepath=target_file,
+                                    original_name=target_function_name,
+                                    line_number=pre_phase2_line,
+                                    project_path=self.project_path
+                                )
+                                
+                                if result:
+                                    actual_function_name, actual_line_number = result
+                                    
+                                    # 記錄 Phase 2 (Coding) 的函式名稱（無論是否變更）
+                                    self.function_name_tracker.record_function_change(
+                                        filepath=target_file,
+                                        original_name=target_function_name,  # 原始名稱（prompt.txt 中的名稱）
+                                        modified_name=actual_function_name,   # Phase 2 結束後的名稱
+                                        round_num=round_num,
+                                        original_line=None,  # Phase 2 不記錄原始行號
+                                        modified_line=actual_line_number,
+                                        current_name=current_function_name,   # Phase 2 開始前的名稱（= Phase 1 結束後）
+                                        phase_number=2  # Phase 2 = Coding
+                                    )
+                                    
+                                    if actual_function_name != current_function_name:
+                                        self.logger.info(f"  ✅ 記錄 Phase 2 名稱變更：{current_function_name} → {actual_function_name}")
+                                    else:
+                                        self.logger.debug(f"  📝 記錄 Phase 2：函式名稱未變更（{actual_function_name}）")
+                                else:
+                                    self.logger.warning(f"  ⚠️  無法提取 Phase 2 結束後的函式名稱")
+                            else:
+                                self.logger.warning(f"  ⚠️  無法取得 Phase 2 開始前的行號")
                         
                         if self.cwe_scan_manager:
                             try:
-                                # 構造只包含當前處理函數的 prompt（匹配實際發送的 prompt）
-                                # 格式: filepath|function_name (只取第一個函數)
-                                single_function_prompt = f"{target_file}|{target_function_name}"
+                                # 構造只包含當前處理函數的 prompt
+                                # 格式: filepath|function_name (使用最新偵測到的名稱)
+                                single_function_prompt = f"{target_file}|{actual_function_name}"
                                 
                                 # 呼叫函式級別掃描（會自動追加到 CSV）
-                                scan_success, scan_files = self.cwe_scan_manager.scan_from_prompt_function_level(
+                                # - original_function_name: prompt.txt 中的原始名稱（用於 CSV「修改前函式名稱」）
+                                # - modified_function_name: Phase 1 修改後的名稱（用於 CSV「修改後函式名稱」）
+                                # - actual_function_name: Phase 2 後的名稱（用於實際掃描）
+                                scan_success, scan_files, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
                                     project_path=self.project_path,
                                     project_name=self.project_path.name,
                                     prompt_content=single_function_prompt,  # 只掃描實際處理的函數
                                     cwe_type=self.target_cwe,
                                     round_number=round_num,
-                                    line_number=line_idx
+                                    line_number=line_idx,
+                                    original_function_name=target_function_name,  # prompt.txt 中的原始名稱
+                                    modified_function_name=current_function_name   # Phase 1 修改後的名稱
                                 )
                                 
                                 if scan_success:
                                     self.logger.info(f"  ✅ 掃描完成")
+                                    # 記錄漏洞資訊到 vulnerable_functions（用於後續備份 vicious pattern）
+                                    if vuln_info and self.vicious_pattern_manager:
+                                        for file_path, func_list in vuln_info.items():
+                                            for func_name, vuln_count in func_list:
+                                                self.vicious_pattern_manager.add_vulnerable_function(
+                                                    file_path=file_path,
+                                                    function_name=func_name,  # 使用掃描時傳入的名稱
+                                                    round_number=round_num,
+                                                    vulnerability_count=vuln_count,
+                                                    scanner="combined"
+                                                )
+                                                self.logger.info(f"    📌 記錄漏洞: {file_path}::{func_name} ({vuln_count} 個)")
                                 else:
                                     self.logger.warning(f"  ⚠️  掃描未找到目標函式")
                             except Exception as e:

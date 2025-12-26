@@ -34,14 +34,18 @@ class FunctionNameTracker:
         
         Args:
             project_name: 專案名稱
-            execution_result_path: ExecutionResult 基礎路徑（預設為專案根目錄/ExecutionResult）
+            execution_result_path: ExecutionResult 基礎路徑（預設為 config.EXECUTION_RESULT_DIR）
         """
         self.logger = get_logger("FunctionNameTracker")
         self.project_name = project_name
         
         # 設定基礎路徑
         if execution_result_path is None:
-            self.execution_result_path = Path(__file__).parent.parent / "ExecutionResult"
+            try:
+                from config.config import config
+                self.execution_result_path = config.EXECUTION_RESULT_DIR
+            except ImportError:
+                self.execution_result_path = Path(__file__).parent.parent / "output" / "ExecutionResult"
         else:
             self.execution_result_path = execution_result_path
         
@@ -98,11 +102,22 @@ class FunctionNameTracker:
                             original_name = row.get('原始函式名稱', '').strip()
                             original_line = row.get('原始行號', '').strip()
                             round_num = row.get('輪數', '').strip()
-                            # 兼容新舊欄位名稱
-                            modified_name = row.get('當前函式名稱', '').strip() or row.get('修改後函式名稱', '').strip()
+                            # 載入「修改後函式名稱」作為 Phase 1 的結果
+                            # 注意：舊格式可能使用「當前函式名稱」，但新格式應該使用「修改後函式名稱」
+                            modified_name = row.get('修改後函式名稱', '').strip()
+                            if not modified_name:
+                                # 相容性處理：如果沒有「修改後函式名稱」，嘗試舊格式
+                                modified_name = row.get('當前函式名稱', '').strip()
                             modified_line = row.get('修改後行號', '').strip()
+                            # 載入階段資訊（新增欄位，舊格式預設為 Query）
+                            phase = row.get('階段', 'Query').strip()
                             
                             if not filepath or not original_name or not round_num or not modified_name:
+                                continue
+                            
+                            # 只載入 Phase 1 (Query) 的記錄到 function_mapping
+                            # 因為 Phase 2 (Coding) 的修改會被 undo，不應該用於推斷當前名稱
+                            if phase != 'Query':
                                 continue
                             
                             key = (filepath, original_name)
@@ -184,6 +199,12 @@ class FunctionNameTracker:
         """
         根據行號提取修改後的函式名稱
         
+        使用漸進式搜尋策略：
+        1. 先嘗試精確行號
+        2. 擴大到 ±5 行
+        3. 再擴大到 ±15 行
+        4. 最後擴大到 ±30 行（因為 AI 可能大幅修改程式碼結構）
+        
         Args:
             filepath: 檔案相對路徑
             original_name: 原始函式名稱（用於日誌）
@@ -210,12 +231,49 @@ class FunctionNameTracker:
                 self.logger.warning(f"⚠️  行號 {line_number} 超出範圍（檔案共 {len(lines)} 行）")
                 return None
             
-            # 讀取該行內容（注意：list 是 0-based）
-            target_line = lines[line_number - 1]
-            
-            # 提取函式名稱：def function_name(
+            # 提取函式名稱的正則：def function_name(
             pattern = r'def\s+(\w+)\s*\('
+            
+            # 先嘗試精確行號
+            target_line = lines[line_number - 1]
             match = re.search(pattern, target_line)
+            actual_line = line_number
+            
+            # 如果精確行號找不到，使用漸進式搜尋
+            if not match:
+                # 漸進式搜尋範圍：±5, ±15, ±30
+                search_ranges = [5, 15, 30]
+                checked_lines = {line_number - 1}  # 已檢查的行索引
+                
+                for search_range in search_ranges:
+                    start_idx = max(0, line_number - 1 - search_range)
+                    end_idx = min(len(lines), line_number + search_range)
+                    
+                    self.logger.debug(f"擴大搜尋範圍 ±{search_range} 行 ({start_idx+1}-{end_idx})")
+                    
+                    # 從目標行號向外擴展搜尋（交錯搜尋上下）
+                    for offset in range(1, search_range + 1):
+                        # 往下搜尋
+                        down_idx = line_number - 1 + offset
+                        if down_idx < end_idx and down_idx not in checked_lines:
+                            checked_lines.add(down_idx)
+                            if re.search(pattern, lines[down_idx]):
+                                match = re.search(pattern, lines[down_idx])
+                                actual_line = down_idx + 1
+                                break
+                        
+                        # 往上搜尋
+                        up_idx = line_number - 1 - offset
+                        if up_idx >= start_idx and up_idx not in checked_lines:
+                            checked_lines.add(up_idx)
+                            if re.search(pattern, lines[up_idx]):
+                                match = re.search(pattern, lines[up_idx])
+                                actual_line = up_idx + 1
+                                break
+                    
+                    if match:
+                        self.logger.info(f"✅ 在第 {actual_line} 行找到函式定義（原預期行號: {line_number}，偏移 {actual_line - line_number} 行）")
+                        break
             
             if match:
                 modified_name = match.group(1) + '()'
@@ -225,13 +283,13 @@ class FunctionNameTracker:
                 modified_name_clean = modified_name.replace('()', '').strip()
                 
                 if modified_name_clean != original_name_clean:
-                    self.logger.info(f"✅ 提取修改後函式名稱: {original_name} → {modified_name}（第 {line_number} 行）")
-                    return (modified_name, line_number)
+                    self.logger.info(f"✅ 提取修改後函式名稱: {original_name} → {modified_name}（第 {actual_line} 行）")
+                    return (modified_name, actual_line)
                 else:
-                    self.logger.debug(f"函式名稱未修改: {original_name}（第 {line_number} 行）")
-                    return (original_name, line_number)
+                    self.logger.debug(f"函式名稱未修改: {original_name}（第 {actual_line} 行）")
+                    return (original_name, actual_line)
             else:
-                self.logger.warning(f"⚠️  第 {line_number} 行無法解析函式定義: {target_line.strip()}")
+                self.logger.warning(f"⚠️  行號 {line_number} 附近（±30 行）無法找到函式定義")
                 return None
             
         except Exception as e:
@@ -241,7 +299,7 @@ class FunctionNameTracker:
     def record_function_change(self, filepath: str, original_name: str, 
                               modified_name: str, round_num: int,
                               original_line: int = None, modified_line: int = None,
-                              current_name: str = None) -> bool:
+                              current_name: str = None, phase_number: int = 1) -> bool:
         """
         記錄函式名稱變更到該輪次的 CSV
         
@@ -253,44 +311,54 @@ class FunctionNameTracker:
             original_line: 原始行號
             modified_line: 修改後行號
             current_name: 當前函式名稱（送出 prompt 前的名稱，若為 None 則自動推斷）
+            phase_number: 階段編號（1=Query Phase, 2=Coding Phase）
             
         Returns:
             bool: 是否成功記錄
         """
         try:
-            # 更新內存映射
+            # 更新內存映射（僅 Phase 1）
             key = (filepath, original_name)
-            if key not in self.function_mapping:
-                self.function_mapping[key] = []
             
-            # 檢查是否已記錄該輪次
-            existing_rounds = [r for r, _, _ in self.function_mapping[key]]
-            if round_num in existing_rounds:
-                self.logger.warning(f"⚠️  第 {round_num} 輪已記錄過：{filepath} | {original_name}")
-                return True
-            
-            # 添加新記錄（包含行號）
-            self.function_mapping[key].append((round_num, modified_name, modified_line))
-            
-            # 儲存原始行號
-            if original_line and key not in self.original_line_numbers:
-                self.original_line_numbers[key] = original_line
+            # Phase 1 (Query) 需要更新 function_mapping 和檢查重複
+            if phase_number == 1:
+                if key not in self.function_mapping:
+                    self.function_mapping[key] = []
+                
+                # 檢查是否已記錄該輪次的 Phase 1
+                existing_rounds = [r for r, _, _ in self.function_mapping[key]]
+                if round_num in existing_rounds:
+                    self.logger.warning(f"⚠️  第 {round_num} 輪 Query Phase 已記錄過：{filepath} | {original_name}")
+                    return True
+                
+                # 添加新記錄（包含行號）- 僅 Phase 1
+                self.function_mapping[key].append((round_num, modified_name, modified_line))
+                
+                # 儲存原始行號
+                if original_line and key not in self.original_line_numbers:
+                    self.original_line_numbers[key] = original_line
             
             # 推斷當前函式名稱（送出 prompt 前的名稱）
             if current_name is None:
-                if round_num == 1:
-                    # 第 1 輪的當前名稱就是原始名稱
-                    current_name = original_name
+                if phase_number == 1:
+                    # Phase 1: 當前名稱是「上一輪 Phase 1 結束後」的名稱
+                    if round_num == 1:
+                        # 第 1 輪的當前名稱就是原始名稱
+                        current_name = original_name
+                    else:
+                        # 第 N 輪的當前名稱是第 N-1 輪 Phase 1 的修改後名稱
+                        prev_name, _ = self.get_function_name_for_round(filepath, original_name, round_num - 1)
+                        current_name = prev_name if prev_name else original_name
                 else:
-                    # 第 N 輪的當前名稱是第 N-1 輪的修改後名稱
-                    prev_name, _ = self.get_function_name_for_round(filepath, original_name, round_num)
-                    current_name = prev_name
+                    # Phase 2: 當前名稱是「本輪 Phase 1 結束後」的名稱
+                    current_round_name, _ = self.get_function_name_for_round(filepath, original_name, round_num)
+                    current_name = current_round_name if current_round_name else original_name
             
             # 寫入到該輪次的 CSV
             round_csv_path = self.csv_dir / f"round{round_num}.csv"
             
-            # 準備表頭（新格式：輪數、原始行號、檔案路徑、原始函式名稱、當前函式名稱、修改後函式名稱、修改後行號、時間戳記）
-            headers = ['輪數', '原始行號', '檔案路徑', '原始函式名稱', '當前函式名稱', '修改後函式名稱', '修改後行號', '時間戳記']
+            # 準備表頭（新格式：輪數、階段、原始行號、檔案路徑、原始函式名稱、當前函式名稱、修改後函式名稱、修改後行號、時間戳記）
+            headers = ['輪數', '階段', '原始行號', '檔案路徑', '原始函式名稱', '當前函式名稱', '修改後函式名稱', '修改後行號', '時間戳記']
             
             # 如果檔案不存在，先寫入表頭
             file_exists = round_csv_path.exists()
@@ -302,8 +370,11 @@ class FunctionNameTracker:
                     writer.writerow(headers)
                 
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # 階段名稱：Phase 1 = Query, Phase 2 = Coding
+                phase_name = "Query" if phase_number == 1 else "Coding"
                 writer.writerow([
                     round_num,
+                    phase_name,
                     original_line if original_line else '',
                     filepath, 
                     original_name,
@@ -313,7 +384,7 @@ class FunctionNameTracker:
                     timestamp
                 ])
             
-            self.logger.info(f"✅ 記錄函式變更：第 {round_num} 輪 - {current_name} → {modified_name}（原始: {original_name}，行 {modified_line}）")
+            self.logger.info(f"✅ 記錄函式變更：第 {round_num} 輪 {phase_name} - {current_name} → {modified_name}（原始: {original_name}，行 {modified_line}）")
             return True
             
         except Exception as e:
@@ -351,8 +422,8 @@ class FunctionNameTracker:
         取得指定輪次應該使用的函式名稱和行號
         
         邏輯：
-        - 第 1 輪：使用原始名稱和原始行號
-        - 第 N 輪（N > 1）：使用第 N-1 輪修改後的名稱和行號
+        - 查找 <= target_round 的最新記錄
+        - 如果沒有記錄，使用原始名稱和原始行號
         
         Args:
             filepath: 檔案路徑
@@ -364,22 +435,17 @@ class FunctionNameTracker:
         """
         key = (filepath, original_name)
         
-        if target_round == 1:
-            # 第 1 輪使用原始名稱和原始行號
-            original_line = self.original_line_numbers.get(key)
-            return (original_name, original_line)
-        
         if key not in self.function_mapping or not self.function_mapping[key]:
             # 沒有變更記錄，使用原始名稱和原始行號
             original_line = self.original_line_numbers.get(key)
             return (original_name, original_line)
         
-        # 找出 < target_round 的最新記錄
+        # 找出 <= target_round 的最新記錄（包含當輪 Phase 1 的修改）
         valid_records = [(r, name, line) for r, name, line in self.function_mapping[key] 
-                        if r < target_round]
+                        if r <= target_round]
         
         if not valid_records:
-            # 沒有之前的記錄，使用原始名稱和原始行號
+            # 沒有符合的記錄，使用原始名稱和原始行號
             original_line = self.original_line_numbers.get(key)
             return (original_name, original_line)
         

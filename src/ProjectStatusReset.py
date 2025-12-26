@@ -2,10 +2,15 @@ import json
 import shutil
 from pathlib import Path
 import os
+import sys
+
+# 添加父目錄到 path 以便導入 config
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config.config import config
 
 status_file = Path('projects/automation_status.json')
 script_root = Path(__file__).parent.parent  # 腳本根目錄
-execution_result_dir = script_root / "ExecutionResult"
+execution_result_dir = config.EXECUTION_RESULT_DIR  # 使用 output/ExecutionResult
 
 # 刪除舊的 automation_report 文件
 projects_dir = Path('projects')
@@ -25,13 +30,27 @@ if status_file.exists():
     except Exception as e:
         print(f"刪除 {status_file} 失敗: {e}")
 
-# 刪除統一的 ExecutionResult 資料夾
-if execution_result_dir.exists():
+# 刪除整個 output 資料夾（包含 ExecutionResult, CWE_Result, OriginalScanResult, vicious_pattern）
+output_dir = config.OUTPUT_BASE_DIR
+if output_dir.exists():
     try:
-        shutil.rmtree(execution_result_dir)
-        print(f"已刪除統一的 ExecutionResult 資料夾: {execution_result_dir}")
+        shutil.rmtree(output_dir)
+        print(f"已刪除 output 資料夾: {output_dir}")
     except Exception as e:
-        print(f"刪除 {execution_result_dir} 失敗: {e}")
+        print(f"刪除 {output_dir} 失敗: {e}")
+
+# 刪除根目錄下的舊 ExecutionResult 和 CWE_Result（向後相容，清理舊結構）
+old_execution_result = script_root / "ExecutionResult"
+old_cwe_result = script_root / "CWE_Result"
+old_original_scan = script_root / "OriginalScanResult"
+
+for old_dir in [old_execution_result, old_cwe_result, old_original_scan]:
+    if old_dir.exists():
+        try:
+            shutil.rmtree(old_dir)
+            print(f"已刪除舊的資料夾: {old_dir}")
+        except Exception as e:
+            print(f"刪除 {old_dir} 失敗: {e}")
 
 # 清理專案目錄中的舊檔案（向後相容）
 projects_root = Path('projects')

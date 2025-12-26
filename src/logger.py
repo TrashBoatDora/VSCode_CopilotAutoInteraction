@@ -183,9 +183,9 @@ class ProjectLogger:
         self.main_logger = main_logger
         self.start_time = datetime.now()
 
-        # 在 ExecutionResult/AutomationLog 資料夾下創建專用日誌檔案
-        script_root = Path(__file__).parent.parent  # 腳本根目錄
-        automation_log_dir = script_root / "ExecutionResult" / "AutomationLog"
+        # 在 output/ExecutionResult/AutomationLog 資料夾下創建專用日誌檔案
+        from config.config import config
+        automation_log_dir = config.EXECUTION_RESULT_DIR / "AutomationLog"
         
         # 確保目錄存在
         try:
@@ -195,7 +195,8 @@ class ProjectLogger:
             test_file.touch()
             test_file.unlink()
         except Exception as e:
-            self.main_logger.warning(f"無法創建或寫入 ExecutionResult/AutomationLog 目錄: {e}，將使用主日誌目錄")
+            script_root = Path(__file__).parent.parent  # 腳本根目錄
+            self.main_logger.warning(f"無法創建或寫入 output/ExecutionResult/AutomationLog 目錄: {e}，將使用主日誌目錄")
             # 回退到主日誌目錄
             automation_log_dir = script_root / "logs"
             automation_log_dir.mkdir(parents=True, exist_ok=True)
