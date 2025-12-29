@@ -30,7 +30,8 @@ class ArtificialSuicideMode:
     
     def __init__(self, copilot_handler, vscode_controller, cwe_scan_manager, 
                  error_handler, project_path: str, target_cwe: str, total_rounds: int,
-                 max_files_limit: int = 0, files_processed_so_far: int = 0):
+                 max_files_limit: int = 0, files_processed_so_far: int = 0,
+                 checkpoint_manager=None):
         """
         初始化 AS 模式控制器
         
@@ -44,6 +45,7 @@ class ArtificialSuicideMode:
             total_rounds: 總輪數
             max_files_limit: 最大檔案處理限制（0 表示無限制）
             files_processed_so_far: 目前已處理的檔案數
+            checkpoint_manager: 檢查點管理器（用於記錄執行進度）
         """
         self.logger = get_logger("ArtificialSuicide")
         self.copilot_handler = copilot_handler
@@ -53,6 +55,7 @@ class ArtificialSuicideMode:
         self.project_path = Path(project_path)
         self.target_cwe = target_cwe
         self.total_rounds = total_rounds
+        self.checkpoint_manager = checkpoint_manager  # 檢查點管理器
         
         # 檔案數量限制相關
         self.max_files_limit = max_files_limit
@@ -421,6 +424,14 @@ class ArtificialSuicideMode:
         Returns:
             bool: 是否成功
         """
+        # 更新 checkpoint: 記錄當前輪數開始
+        if self.checkpoint_manager:
+            self.checkpoint_manager.update_progress(
+                current_round=round_num,
+                current_line=1,
+                current_phase=1  # AS Mode Phase 1 開始
+            )
+        
         # === 第 1 道程序：Query Phase ===
         self.logger.info(f"▶️  第 {round_num} 輪 - 第 1 道程序（Query Phase）")
         
@@ -431,6 +442,13 @@ class ArtificialSuicideMode:
         self.logger.info("  💾 Keep 修改...")
         self.vscode_controller.clear_copilot_memory(modification_action="keep")
         time.sleep(2)
+        
+        # 更新 checkpoint: Phase 2 開始
+        if self.checkpoint_manager:
+            self.checkpoint_manager.update_progress(
+                current_phase=2,  # AS Mode Phase 2 開始
+                current_line=1
+            )
         
         # === 第 2 道程序：Coding Phase + Scan ===
         self.logger.info(f"▶️  第 {round_num} 輪 - 第 2 道程序（Coding Phase + Scan）")
@@ -480,6 +498,10 @@ class ArtificialSuicideMode:
                 self.round_responses[round_num] = {}
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
+                # 更新 checkpoint: 記錄 Phase 1 當前處理的行數
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.update_progress(current_line=line_idx)
+                
                 # 解析 prompt 行
                 target_file, target_function_name = self._parse_prompt_line(line)
                 if not target_file or not target_function_name:
@@ -749,6 +771,10 @@ class ArtificialSuicideMode:
             failed_lines = []
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
+                # 更新 checkpoint: 記錄 Phase 2 當前處理的行數
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.update_progress(current_line=line_idx)
+                
                 # 解析 prompt 行
                 target_file, target_function_name = self._parse_prompt_line(line)
                 if not target_file or not target_function_name:

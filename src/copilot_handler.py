@@ -46,7 +46,7 @@ class CopilotHandler:
     """Copilot Chat 操作處理器"""
     COMPLETION_INSTRUCTION = ''
 
-    def __init__(self, error_handler=None, interaction_settings=None, cwe_scan_manager=None, cwe_scan_settings=None):
+    def __init__(self, error_handler=None, interaction_settings=None, cwe_scan_manager=None, cwe_scan_settings=None, checkpoint_manager=None):
         """
         初始化 Copilot 處理器
         
@@ -55,6 +55,7 @@ class CopilotHandler:
             interaction_settings: 互動設定
             cwe_scan_manager: CWE 掃描管理器
             cwe_scan_settings: CWE 掃描設定
+            checkpoint_manager: 檢查點管理器（用於記錄執行進度）
         """
         self.logger = get_logger("CopilotHandler")
         self.is_chat_open = False
@@ -65,6 +66,7 @@ class CopilotHandler:
         self.interaction_settings = interaction_settings  # 添加外部設定支援
         self.cwe_scan_manager = cwe_scan_manager  # CWE 掃描管理器
         self.cwe_scan_settings = cwe_scan_settings  # CWE 掃描設定
+        self.checkpoint_manager = checkpoint_manager  # 檢查點管理器
         self._clipboard_lock = False  # 剪貼簿鎖定狀態，避免併發衝突
         self.query_stats = None  # 查詢統計器（用於非 AS Mode 的統計）
         
@@ -931,6 +933,10 @@ class CopilotHandler:
                 line_success = False
                 retry_count = 0
                 
+                # 更新 checkpoint: 記錄當前處理的行數
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.update_progress(current_line=line_num)
+                
                 # 持續重試直到成功
                 while not line_success:
                     try:
@@ -1202,6 +1208,14 @@ class CopilotHandler:
             # 進行多輪互動
             for round_num in range(1, max_rounds + 1):
                 self.logger.create_separator(f"專案專用模式：開始第 {round_num} 輪互動")
+                
+                # 更新 checkpoint: 記錄當前輪數開始
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.update_progress(
+                        current_round=round_num,
+                        current_line=1,
+                        current_phase=1  # Non-AS Mode 始終為 phase 1
+                    )
                 
                 if round_num > 1:
                     # 清除 Copilot 記憶（每輪獨立）

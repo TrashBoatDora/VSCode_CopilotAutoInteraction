@@ -28,6 +28,7 @@ from src.error_handler import (
 )
 from src.cwe_scan_manager import CWEScanManager
 from src.cwe_scan_ui import show_cwe_scan_settings
+from src.checkpoint_manager import CheckpointManager, check_for_resumable_execution
 
 class HybridUIAutomationScript:
     """混合式 UI 自動化腳本主控制器"""
@@ -40,11 +41,13 @@ class HybridUIAutomationScript:
         self.project_manager = ProjectManager()
         self.vscode_controller = VSCodeController()
         self.error_handler = ErrorHandler()
+        self.checkpoint_manager = CheckpointManager()  # 檢查點管理器（需先初始化）
         self.copilot_handler = CopilotHandler(
             self.error_handler, 
             interaction_settings=None,
             cwe_scan_manager=None,
-            cwe_scan_settings=None
+            cwe_scan_settings=None,
+            checkpoint_manager=self.checkpoint_manager  # 傳遞 checkpoint 管理器
         )  # 初始化時傳入基本參數
         self.image_recognition = ImageRecognition()
         self.recovery_manager = RecoveryManager()
@@ -55,6 +58,12 @@ class HybridUIAutomationScript:
         self.use_smart_wait = True  # 預設使用智能等待
         self.interaction_settings = None  # 儲存互動設定
         self.cwe_scan_settings = None  # CWE 掃描設定
+        
+        # 恢復執行相關
+        self.resume_mode = False  # 是否處於恢復模式
+        self.resume_project_index = 0  # 恢復起始專案索引
+        self.resume_round = 1  # 恢復起始輪數
+        self.resume_line = 1  # 恢復起始行數
         
         # 執行統計
         self.total_projects = 0
@@ -81,27 +90,78 @@ class HybridUIAutomationScript:
             self.start_time = time.time()
             self.logger.create_separator("開始執行自動化腳本")
             
-            # 顯示選項對話框（包含專案選擇和 Artificial Suicide 設定）
-            (selected_projects, self.use_smart_wait, clean_history, 
-             artificial_suicide_enabled, artificial_suicide_rounds,
-             max_files_to_process) = self.ui_manager.show_options_dialog()
-            
-            # 設定檔案數量限制
-            self.max_files_limit = max_files_to_process
-            if self.max_files_limit > 0:
-                self.logger.info(f"📊 檔案數量限制已啟用: 最多處理 {self.max_files_limit} 個檔案")
+            # 檢查是否有可恢復的執行記錄
+            resume_info = self._check_for_resumable_execution()
+            if resume_info:
+                # 使用恢復的設定 - 完全自動化，不需要重新設定
+                selected_projects = resume_info['project_list']
+                self.use_smart_wait = resume_info['settings'].get('use_smart_wait', True)
+                self.max_files_limit = resume_info['settings'].get('max_files', 0)
+                artificial_suicide_enabled = resume_info['execution_mode'] == 'as'
+                artificial_suicide_rounds = resume_info['settings'].get('artificial_suicide_rounds', 10)
+                
+                # 恢復已處理的檔案計數
+                self.total_files_processed = resume_info.get('total_files_processed', 0)
+                
+                # 設定恢復參數
+                self.resume_mode = True
+                self.resume_project_index = resume_info['resume_from']['project_index']
+                self.resume_round = resume_info['resume_from']['round']
+                self.resume_line = resume_info['resume_from']['line']
+                
+                self.logger.info(f"🔄 恢復模式已啟用")
+                self.logger.info(f"   從專案索引 {self.resume_project_index} ({resume_info['resume_from']['project_name']}) 開始")
+                self.logger.info(f"   從輪數 {self.resume_round}, 行數 {self.resume_line} 開始")
+                self.logger.info(f"   已處理檔案: {self.total_files_processed}/{self.max_files_limit}")
+                self.logger.info(f"   剩餘配額: {resume_info.get('remaining_files_quota', 'N/A')}")
             else:
-                self.logger.info("📊 檔案數量限制未啟用: 將處理所有選定專案")
+                # 正常啟動流程
+                # 顯示選項對話框（包含專案選擇和 Artificial Suicide 設定）
+                (selected_projects, self.use_smart_wait, clean_history, 
+                 artificial_suicide_enabled, artificial_suicide_rounds,
+                 max_files_to_process) = self.ui_manager.show_options_dialog()
+                
+                # 設定檔案數量限制
+                self.max_files_limit = max_files_to_process
+                if self.max_files_limit > 0:
+                    self.logger.info(f"📊 檔案數量限制已啟用: 最多處理 {self.max_files_limit} 個檔案")
+                else:
+                    self.logger.info("📊 檔案數量限制未啟用: 將處理所有選定專案")
+                
+                # 如果需要清理歷史記錄
+                if clean_history and selected_projects:
+                    self.logger.info(f"清理 {len(selected_projects)} 個專案的執行記錄")
+                    if not self.ui_manager.clean_project_history(selected_projects):
+                        self.logger.error("清理執行記錄失敗")
+                        return False
             
-            # 如果需要清理歷史記錄
-            if clean_history and selected_projects:
-                self.logger.info(f"清理 {len(selected_projects)} 個專案的執行記錄")
-                if not self.ui_manager.clean_project_history(selected_projects):
-                    self.logger.error("清理執行記錄失敗")
-                    return False
-            
-            # 如果啟用 Artificial Suicide 模式，跳過互動設定並使用預設設定
-            if artificial_suicide_enabled:
+            # 設定互動模式（恢復模式時從檢查點載入）
+            if self.resume_mode and resume_info:
+                # 從檢查點恢復設定
+                self.interaction_settings = resume_info['settings']
+                self.cwe_scan_settings = {
+                    'enabled': True,
+                    'cwe_type': resume_info['settings'].get('cwe_type', '022'),
+                    'output_dir': resume_info['settings'].get('cwe_output_dir', str(config.CWE_RESULT_DIR))
+                }
+                # 如果啟用 CWE 掃描，初始化掃描管理器
+                if self.cwe_scan_settings.get('enabled'):
+                    self.cwe_scan_manager = CWEScanManager()
+                    self.copilot_handler.cwe_scan_manager = self.cwe_scan_manager
+                    self.copilot_handler.cwe_scan_settings = self.cwe_scan_settings
+                    self.logger.info(f"✅ CWE 掃描已恢復 (類型: CWE-{self.cwe_scan_settings['cwe_type']})")
+                
+                # 更新 CopilotHandler
+                self.copilot_handler = CopilotHandler(
+                    self.error_handler,
+                    self.interaction_settings,
+                    self.cwe_scan_manager,
+                    self.cwe_scan_settings,
+                    self.checkpoint_manager  # 傳遞 checkpoint 管理器
+                )
+                self.logger.info(f"✅ 已從檢查點恢復設定: {self.interaction_settings}")
+            elif artificial_suicide_enabled:
+                # 如果啟用 Artificial Suicide 模式，跳過互動設定並使用預設設定
                 self.logger.info(f"🎯 Artificial Suicide 模式已啟用（輪數: {artificial_suicide_rounds}）")
                 self.logger.info("跳過互動設定，使用 Artificial Suicide 專用設定")
                 
@@ -117,12 +177,13 @@ class HybridUIAutomationScript:
                     "artificial_suicide_mode": True,
                     "artificial_suicide_rounds": artificial_suicide_rounds
                 }
+                # 顯示 CWE 掃描設定選項
+                self._show_cwe_scan_settings_dialog()
             else:
                 # 一般模式：顯示互動設定選項
                 self._show_interaction_settings_dialog()
-            
-            # 顯示 CWE 掃描設定選項
-            self._show_cwe_scan_settings_dialog()
+                # 顯示 CWE 掃描設定選項
+                self._show_cwe_scan_settings_dialog()
             
             self.logger.info(f"使用者選擇{'啟用' if self.use_smart_wait else '停用'}智能等待功能")
             self.logger.info(f"選定處理的專案: {', '.join(selected_projects)}")
@@ -148,6 +209,32 @@ class HybridUIAutomationScript:
             
             self.total_projects = len(selected_project_list)
             self.logger.info(f"將處理 {self.total_projects} 個選定的專案")
+            
+            # 建立或更新檢查點（非恢復模式時）
+            if not self.resume_mode:
+                checkpoint_settings = {
+                    'max_rounds': self.interaction_settings.get('max_rounds', 10) if self.interaction_settings else 10,
+                    'max_files': self.max_files_limit,
+                    'cwe_type': self.cwe_scan_settings.get('cwe_type', '') if self.cwe_scan_settings else '',
+                    'cwe_output_dir': str(config.CWE_RESULT_DIR),
+                    'cwe_enabled': self.cwe_scan_settings.get('enabled', False) if self.cwe_scan_settings else False,
+                    'copilot_chat_modification_action': self.interaction_settings.get('copilot_chat_modification_action', 'revert') if self.interaction_settings else 'revert',
+                    'use_coding_instruction': self.interaction_settings.get('use_coding_instruction', False) if self.interaction_settings else False,
+                    'use_smart_wait': self.use_smart_wait,
+                    'prompt_source_mode': self.interaction_settings.get('prompt_source_mode', 'project') if self.interaction_settings else 'project',
+                    'artificial_suicide_mode': self.interaction_settings.get('artificial_suicide_mode', False) if self.interaction_settings else False,
+                    'artificial_suicide_rounds': self.interaction_settings.get('artificial_suicide_rounds', 10) if self.interaction_settings else 10,
+                    'interaction_enabled': self.interaction_settings.get('interaction_enabled', True) if self.interaction_settings else True,
+                    'include_previous_response': self.interaction_settings.get('include_previous_response', False) if self.interaction_settings else False,
+                    'round_delay': self.interaction_settings.get('round_delay', 2) if self.interaction_settings else 2
+                }
+                execution_mode = 'as' if checkpoint_settings.get('artificial_suicide_mode') else 'non_as'
+                self.checkpoint_manager.create_checkpoint(
+                    execution_mode=execution_mode,
+                    project_list=[p.name for p in selected_project_list],
+                    settings=checkpoint_settings
+                )
+                self.logger.info("✅ 已建立執行檢查點")
             
             # 執行所有選定的專案
             if not self._process_all_projects(selected_project_list):
@@ -200,7 +287,8 @@ class HybridUIAutomationScript:
                     self.error_handler, 
                     settings,
                     self.cwe_scan_manager,
-                    self.cwe_scan_settings
+                    self.cwe_scan_settings,
+                    self.checkpoint_manager  # 傳遞 checkpoint 管理器
                 )
                 self.logger.info(f"本次執行的互動設定: {settings}")
                 
@@ -248,6 +336,90 @@ class HybridUIAutomationScript:
         except Exception as e:
             self.logger.error(f"顯示 CWE 掃描設定時發生錯誤: {e}")
             sys.exit(1)
+    
+    def _check_for_resumable_execution(self) -> Optional[Dict]:
+        """
+        檢查是否有可恢復的執行記錄
+        
+        Returns:
+            Optional[Dict]: 恢復資訊字典，如果沒有可恢復的記錄則返回 None
+        """
+        try:
+            resume_info = self.checkpoint_manager.get_resume_info()
+            
+            if resume_info is None:
+                return None
+            
+            # 顯示恢復資訊並詢問使用者
+            self.logger.info("=" * 60)
+            self.logger.info("發現未完成的執行記錄")
+            self.logger.info("=" * 60)
+            print(self.checkpoint_manager.format_resume_summary(resume_info))
+            
+            # 使用 tkinter 顯示對話框
+            import tkinter as tk
+            from tkinter import messagebox
+            
+            root = tk.Tk()
+            root.withdraw()  # 隱藏主視窗
+            
+            # 準備顯示資訊
+            progress_str = f"{len(resume_info['completed_projects'])}/{resume_info['total_projects']}"
+            resume_from_str = f"{resume_info['resume_from']['project_name']}"
+            files_str = f"{resume_info.get('total_files_processed', 0)}/{resume_info.get('max_files_limit', 'N/A')}"
+            remaining_str = f"{resume_info.get('remaining_files_quota', 'N/A')}"
+            mode_str = "AS Mode" if resume_info['execution_mode'] == 'as' else "標準模式"
+            max_rounds = resume_info['settings'].get('max_rounds', 10)
+            
+            # AS Mode 需要顯示 phase 資訊
+            phase_str = ""
+            if resume_info['execution_mode'] == 'as':
+                phase = resume_info['resume_from'].get('phase', 1)
+                phase_name = "Query" if phase == 1 else "Coding"
+                phase_str = f", Phase: {phase} ({phase_name})"
+            
+            result = messagebox.askyesnocancel(
+                "發現未完成的執行",
+                f"發現未完成的執行記錄:\n\n"
+                f"【執行設定】\n"
+                f"  模式: {mode_str}\n"
+                f"  CWE 類型: CWE-{resume_info['settings'].get('cwe_type', 'N/A')}\n"
+                f"  最大輪數: {max_rounds}\n"
+                f"  檔案限制: {resume_info.get('max_files_limit', 0)}\n\n"
+                f"【執行進度】\n"
+                f"  專案進度: {progress_str}\n"
+                f"  檔案進度: {files_str}\n"
+                f"  剩餘配額: {remaining_str}\n\n"
+                f"【中斷位置】\n"
+                f"  專案: {resume_from_str}\n"
+                f"  輪數: {resume_info['resume_from']['round']}, 行數: {resume_info['resume_from']['line']}{phase_str}\n\n"
+                f"是否要從中斷點繼續執行?\n"
+                f"（將自動套用上次的所有設定）\n\n"
+                f"• 是: 繼續執行剩餘 {remaining_str} 個檔案\n"
+                f"• 否: 開始新的執行\n"
+                f"• 取消: 退出程式",
+                icon='question'
+            )
+            
+            root.destroy()
+            
+            if result is None:
+                # 使用者選擇取消
+                self.logger.info("使用者選擇取消，退出程式")
+                sys.exit(0)
+            elif result:
+                # 使用者選擇恢復
+                self.logger.info("✅ 使用者選擇從中斷點繼續執行（自動套用上次設定）")
+                return resume_info
+            else:
+                # 使用者選擇重新開始
+                self.logger.info("使用者選擇開始新的執行，清除舊的檢查點")
+                self.checkpoint_manager.clear_checkpoint()
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"檢查恢復記錄時發生錯誤: {e}")
+            return None
 
     def _pre_execution_checks(self) -> bool:
         """
@@ -293,12 +465,30 @@ class HybridUIAutomationScript:
             total_success = 0
             total_failed = 0
             
-            for i, project in enumerate(projects, 1):
-                self.logger.info(f"處理專案 {i}/{len(projects)}: {project.name}")
+            # 處理恢復模式：跳過已完成的專案
+            start_index = 0
+            if self.resume_mode and self.resume_project_index > 0:
+                start_index = self.resume_project_index
+                self.logger.info(f"🔄 恢復模式: 跳過前 {start_index} 個已完成的專案")
+            
+            for i, project in enumerate(projects):
+                # 跳過已完成的專案（恢復模式）
+                if i < start_index:
+                    self.logger.debug(f"跳過已完成專案 {i+1}/{len(projects)}: {project.name}")
+                    continue
+                    
+                self.logger.info(f"處理專案 {i+1}/{len(projects)}: {project.name}")
+                
+                # 更新檢查點：記錄當前專案
+                self.checkpoint_manager.update_progress(
+                    project_index=i,
+                    project_name=project.name
+                )
                 
                 # 檢查是否需要緊急停止
                 if self.error_handler.emergency_stop_requested:
                     self.logger.warning("收到緊急停止請求，中止專案處理")
+                    self.checkpoint_manager.mark_interrupted()
                     break
                 
                 # 檢查檔案數量限制（在處理專案前）
@@ -316,9 +506,9 @@ class HybridUIAutomationScript:
                     if self.total_files_processed >= self.max_files_limit:
                         self.logger.warning(
                             f"⚠️  已達到檔案數量限制 ({self.total_files_processed}/{self.max_files_limit})，"
-                            f"停止處理剩餘 {len(projects) - i + 1} 個專案"
+                            f"停止處理剩餘 {len(projects) - i} 個專案"
                         )
-                        self.skipped_projects += (len(projects) - i + 1)
+                        self.skipped_projects += (len(projects) - i)
                         break
                     
                     # 如果處理此專案會超過限制，則部分處理
@@ -342,11 +532,25 @@ class HybridUIAutomationScript:
                 if success:
                     total_success += 1
                     self.successful_projects += 1
+                    # 更新檢查點：記錄專案完成和已處理檔案數
+                    self.checkpoint_manager.update_progress(
+                        completed_project=project.name,
+                        total_files_processed=self.total_files_processed
+                    )
                 else:
                     total_failed += 1
                     self.failed_projects += 1
+                    # 即使失敗也更新已處理檔案數
+                    self.checkpoint_manager.update_progress(
+                        total_files_processed=self.total_files_processed
+                    )
                 
                 self.processed_projects += 1
+                
+                # 重置恢復模式的輪數和行數（下一個專案從頭開始）
+                if self.resume_mode and i == self.resume_project_index:
+                    self.resume_round = 1
+                    self.resume_line = 1
                 
                 # 項目間短暫休息
                 time.sleep(2)
@@ -358,10 +562,16 @@ class HybridUIAutomationScript:
             if self.max_files_limit > 0:
                 self.logger.info(f"📊 檔案處理統計: {self.total_files_processed}/{self.max_files_limit}")
             
+            # 標記檢查點為完成（如果沒有被中斷）
+            if not self.error_handler.emergency_stop_requested:
+                self.checkpoint_manager.mark_completed()
+                self.logger.info("✅ 所有專案處理完成，檢查點已標記為完成")
+            
             return True
             
         except Exception as e:
             self.logger.error(f"處理專案時發生錯誤: {str(e)}")
+            self.checkpoint_manager.mark_interrupted()
             return False
     
     def _process_single_project(self, project: ProjectInfo, max_lines: int = None) -> bool:
@@ -649,7 +859,8 @@ class HybridUIAutomationScript:
                 target_cwe=target_cwe,
                 total_rounds=num_rounds,
                 max_files_limit=self.max_files_limit,
-                files_processed_so_far=self.total_files_processed
+                files_processed_so_far=self.total_files_processed,
+                checkpoint_manager=self.checkpoint_manager  # 傳遞 checkpoint 管理器
             )
             
             # 執行攻擊流程
