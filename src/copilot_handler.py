@@ -1205,6 +1205,16 @@ class CopilotHandler:
             first_round_successful_lines = 0  # 只記錄第一輪的處理行數
             total_failed_lines = []
             
+            # 取得 vscode_controller 和 modification_action（在迴圈外取得避免重複導入）
+            try:
+                from src.vscode_controller import vscode_controller
+            except ImportError:
+                from vscode_controller import vscode_controller
+            modification_action = interaction_settings.get(
+                "copilot_chat_modification_action", 
+                config.COPILOT_CHAT_MODIFICATION_ACTION
+            )
+            
             # 進行多輪互動
             for round_num in range(1, max_rounds + 1):
                 self.logger.create_separator(f"專案專用模式：開始第 {round_num} 輪互動")
@@ -1216,19 +1226,6 @@ class CopilotHandler:
                         current_line=1,
                         current_phase=1  # Non-AS Mode 始終為 phase 1
                     )
-                
-                if round_num > 1:
-                    # 清除 Copilot 記憶（每輪獨立）
-                    try:
-                        from src.vscode_controller import vscode_controller
-                    except ImportError:
-                        from vscode_controller import vscode_controller
-                    modification_action = interaction_settings.get(
-                        "copilot_chat_modification_action", 
-                        config.COPILOT_CHAT_MODIFICATION_ACTION
-                    )
-                    vscode_controller.clear_copilot_memory(modification_action)
-                    time.sleep(2)  # 等待記憶清除完成
                 
                 # 處理本輪的按行互動（傳遞 max_lines 限制）
                 success, successful_lines, failed_lines = self.process_project_with_line_by_line(
@@ -1251,6 +1248,11 @@ class CopilotHandler:
                 if self.query_stats:
                     self.logger.info(f"📊 更新第 {round_num} 輪統計...")
                     self.query_stats.update_round_result(round_num)
+                
+                # 本輪結束後：執行 keep/undo 操作並清除 Copilot 記憶
+                self.logger.info(f"📍 第 {round_num} 輪結束，執行 {modification_action} 操作並清除記憶...")
+                vscode_controller.clear_copilot_memory(modification_action)
+                time.sleep(2)  # 等待記憶清除完成
                 
                 # 輪次間暫停
                 if round_num < max_rounds:
@@ -1638,6 +1640,17 @@ class CopilotHandler:
             success_count = 0
             last_response = None
             
+            # 取得 vscode_controller 和 modification_action（在迴圈外取得避免重複導入）
+            try:
+                from src.vscode_controller import vscode_controller
+            except ImportError:
+                from vscode_controller import vscode_controller
+            
+            modification_action = interaction_settings.get(
+                "copilot_chat_modification_action", 
+                config.COPILOT_CHAT_MODIFICATION_ACTION
+            )
+            
             # 進行多輪互動
             for round_num in range(1, max_rounds + 1):
                 self.logger.create_separator(f"開始第 {round_num} 輪互動")
@@ -1669,23 +1682,16 @@ class CopilotHandler:
                         self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞")
                 
                 if round_num > 1:
-                    # 清除 Copilot 記憶（每輪獨立），使用正確的設定參數
-                    try:
-                        from src.vscode_controller import vscode_controller
-                    except ImportError:
-                        from vscode_controller import vscode_controller
-                    try:
-                        from config.config import config
-                    except ImportError:
-                        from config import config
-                    
-                    # 獲取修改結果處理設定
-                    modification_action = config.COPILOT_CHAT_MODIFICATION_ACTION
-                    if self.interaction_settings:
-                        modification_action = self.interaction_settings.get("copilot_chat_modification_action", modification_action)
-                    
-                    vscode_controller.clear_copilot_memory(modification_action)
-                    time.sleep(1)  # 等待記憶清除完成
+                    # 如果設定要串接上一輪回應
+                    if include_previous_response:
+                        previous_response_content = self._read_previous_round_response(project_path, round_num - 1)
+                        if previous_response_content:
+                            current_prompt = self.create_next_round_prompt(round2_prompt, previous_response_content)
+                            self.logger.info(f"已讀取第 {round_num - 1} 輪回應內容用於組合新提示詞 (內容長度: {len(previous_response_content)} 字元)")
+                        else:
+                            self.logger.warning(f"無法讀取第 {round_num - 1} 輪回應內容，僅使用第二輪基礎提示詞")
+                    else:
+                        self.logger.info(f"第 {round_num} 輪：根據設定，不包含上一輪回應，使用第二輪基礎提示詞")
                 
                 # 處理本輪互動（傳遞 max_lines，雖然全域模式不使用）
                 success, processed = self.process_project_complete(
@@ -1702,6 +1708,11 @@ class CopilotHandler:
                 else:
                     self.logger.error(f"❌ 第 {round_num} 輪互動失敗")
                     break
+                
+                # 本輪結束後：執行 keep/undo 操作並清除 Copilot 記憶
+                self.logger.info(f"📍 第 {round_num} 輪結束，執行 {modification_action} 操作並清除記憶...")
+                vscode_controller.clear_copilot_memory(modification_action)
+                time.sleep(1)  # 等待記憶清除完成
                 
                 # 輪次間暫停
                 if round_num < max_rounds:

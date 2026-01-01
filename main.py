@@ -649,22 +649,24 @@ class HybridUIAutomationScript:
             if self.error_handler.emergency_stop_requested:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
-            # 步驟1: 開啟專案
-            project_logger.log("開啟 VS Code 專案")
-            if not self.vscode_controller.open_project(project.path):
-                raise AutomationError("無法開啟專案", ErrorType.VSCODE_ERROR)
+            # 判斷是否使用 Artificial Suicide 模式（需要提前判斷以決定是否在這裡開啟專案）
+            artificial_suicide_mode = self.interaction_settings.get("artificial_suicide_mode", False) if self.interaction_settings else False
+            artificial_suicide_rounds = self.interaction_settings.get("artificial_suicide_rounds", 3) if self.interaction_settings else 3
             
-            # 檢查中斷請求
-            if self.error_handler.emergency_stop_requested:
-                raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
-            
-            # 步驟2: 清除 Copilot 記憶
-            project_logger.log("清除 Copilot Chat 記憶")
-            # 獲取修改結果處理設定
-            modification_action = self.interaction_settings.get("copilot_chat_modification_action", config.COPILOT_CHAT_MODIFICATION_ACTION) if self.interaction_settings else config.COPILOT_CHAT_MODIFICATION_ACTION
-            self.logger.info(f"修改結果處理設定: {modification_action}")
-            if not self.vscode_controller.clear_copilot_memory(modification_action):
-                self.logger.warning("Copilot 記憶清除失敗，但繼續執行")
+            # AS Mode 由 artificial_suicide_mode.py 自行管理專案開啟和記憶清除
+            # 非 AS Mode 則在這裡處理
+            if not artificial_suicide_mode:
+                # 步驟1: 開啟專案（僅非 AS Mode）
+                project_logger.log("開啟 VS Code 專案")
+                if not self.vscode_controller.open_project(project.path):
+                    raise AutomationError("無法開啟專案", ErrorType.VSCODE_ERROR)
+                
+                # 檢查中斷請求
+                if self.error_handler.emergency_stop_requested:
+                    raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
+                
+                # 注意：不在專案開始時執行 clear_copilot_memory
+                # clear_copilot_memory 會在每輪結束後執行（由 copilot_handler 負責）
             
             # 檢查中斷請求
             if self.error_handler.emergency_stop_requested:
@@ -674,8 +676,6 @@ class HybridUIAutomationScript:
             # 使用互動設定或預設值
             interaction_enabled = self.interaction_settings.get("interaction_enabled", config.INTERACTION_ENABLED) if self.interaction_settings else config.INTERACTION_ENABLED
             max_rounds = self.interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS) if self.interaction_settings else config.INTERACTION_MAX_ROUNDS
-            artificial_suicide_mode = self.interaction_settings.get("artificial_suicide_mode", False) if self.interaction_settings else False
-            artificial_suicide_rounds = self.interaction_settings.get("artificial_suicide_rounds", 3) if self.interaction_settings else 3
             
             if artificial_suicide_mode:
                 # 使用 Artificial Suicide 攻擊模式

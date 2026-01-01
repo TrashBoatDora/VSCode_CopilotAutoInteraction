@@ -78,6 +78,7 @@ class Config:
     STOP_BUTTON_IMAGE = ASSETS_DIR / "stop_button.png"        # Copilot 停止按鈕
     SEND_BUTTON_IMAGE = ASSETS_DIR / "send_button.png"        # Copilot 發送按鈕
     NEWCHAT_SAVE_IMAGE = ASSETS_DIR / "NewChat_Save.png"      # 新聊天保存提示
+    UNDO_CHECK_IMAGE = ASSETS_DIR / "undo_check.png"          # Undo 確認對話框
     
     # ==================== 多輪互動設定 ====================
     INTERACTION_MAX_ROUNDS = 3      # 最大互動輪數
