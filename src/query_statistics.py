@@ -68,11 +68,14 @@ class QueryStatistics:
         
         self.logger.info(f"初始化 Query 統計器 - 專案: {project_name}, CWE-{cwe_type}, {total_rounds} 輪")
     
-    def initialize_csv(self) -> bool:
+    def initialize_csv(self, force: bool = False) -> bool:
         """
         初始化 CSV 檔案（只在開始時執行一次）
         
         建立檔案結構，所有欄位初始為空白
+        
+        Args:
+            force: 是否強制覆蓋已存在的檔案（預設 False）
         
         Returns:
             bool: 是否成功初始化
@@ -80,6 +83,11 @@ class QueryStatistics:
         try:
             # 確保資料夾存在
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 檢查檔案是否已存在
+            if self.csv_path.exists() and not force:
+                self.logger.info(f"📄 CSV 檔案已存在，跳過初始化: {self.csv_path}")
+                return True
             
             # 準備表頭
             headers = ['檔案路徑', '函式名稱'] + \
@@ -908,12 +916,15 @@ class NonASModeStatistics:
         else:
             return (function_key, '')
     
-    def initialize_csv(self) -> bool:
+    def initialize_csv(self, force: bool = False) -> bool:
         """
         初始化 CSV 檔案（只在開始時執行一次）
         
         建立檔案結構，所有欄位初始為空白
         注意：使用「漏洞出現次數」而非「QueryTimes」
+        
+        Args:
+            force: 是否強制覆蓋已存在的檔案（預設 False）
         
         Returns:
             bool: 是否成功初始化
@@ -921,6 +932,11 @@ class NonASModeStatistics:
         try:
             # 確保資料夾存在
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 檢查檔案是否已存在
+            if self.csv_path.exists() and not force:
+                self.logger.info(f"📄 非 AS Mode CSV 檔案已存在，跳過初始化: {self.csv_path}")
+                return True
             
             # 準備表頭：使用「漏洞出現次數」取代「QueryTimes」
             headers = ['檔案路徑', '函式名稱'] + \
