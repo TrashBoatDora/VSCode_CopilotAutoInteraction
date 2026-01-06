@@ -39,7 +39,24 @@ This is implemented in `vscode_controller.clear_copilot_memory()` which:
 3. If a save dialog appears, handles it based on `modification_action` parameter
 4. Closes Copilot Chat (`Escape`)
 
-### 3.2 AS Mode: Phase 1 and Phase 2 Keep/Undo timing
+### 3.2 Baseline (Original State) Scan - CRITICAL for checkpoint resume
+
+**原始狀態掃描**是在任何 AI 互動開始前執行的一次性掃描，記錄檔案的原始漏洞狀態（round0）。
+
+**關鍵行為:**
+- 原始狀態掃描只執行一次，在第一輪開始前
+- Checkpoint 會記錄 `baseline_scan_completed[project_name] = true`
+- 恢復執行時會檢查此標記，已完成則跳過原始掃描
+- 這避免了「第 1 輪執行到一半中斷，重啟後程式碼已被修改」的錯誤掃描問題
+
+**程式碼位置:**
+| Mode | Location | Function |
+|------|----------|----------|
+| AS Mode | `artificial_suicide_mode.py:351-395` | `execute()` 步驟 0.8 |
+| Non-AS | `copilot_handler.py:1203-1234` | `_process_project_with_project_prompts()` |
+| Checkpoint | `checkpoint_manager.py:183-198` | `is_baseline_scan_completed()` |
+
+### 3.3 AS Mode: Phase 1 and Phase 2 Keep/Undo timing
 
 ```
 Round N execution flow:
@@ -73,7 +90,7 @@ Round N execution flow:
 - Phase 2 changes are UNDONE because we only want to scan for vulnerabilities, not keep them
 - The backup happens AFTER undo, capturing the Phase 1 state (renamed but safe)
 
-### 3.3 Non-AS Mode: Simple Keep/Undo per round
+### 3.4 Non-AS Mode: Simple Keep/Undo per round
 
 ```
 Round N execution flow:
@@ -91,17 +108,36 @@ Round N execution flow:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.4 Code locations for Keep/Undo logic
+### 3.5 Code locations for Keep/Undo logic
 
 | Location | Function | Purpose |
 |----------|----------|---------|
 | `src/vscode_controller.py:133` | `clear_copilot_memory()` | Core implementation using `pyautogui` |
-| `src/artificial_suicide_mode.py:432` | `_execute_round()` | AS Mode Phase 1 KEEP |
-| `src/artificial_suicide_mode.py:443` | `_execute_round()` | AS Mode Phase 2 REVERT |
-| `src/copilot_handler.py:1216` | `_process_project_with_project_prompts()` | Non-AS per-round |
-| `src/copilot_handler.py:1378` | `clear_and_restart_chat()` | Helper method |
+| `src/artificial_suicide_mode.py:480` | `_execute_round()` | AS Mode Phase 1 KEEP |
+| `src/artificial_suicide_mode.py:505` | `_execute_round()` | AS Mode Phase 2 REVERT |
+| `src/copilot_handler.py:1305` | `_process_project_with_project_prompts()` | Non-AS per-round |
+| `src/copilot_handler.py:1411` | `clear_and_restart_chat()` | Helper method |
 
-### 3.5 CWE Scan timing relative to Keep/Undo
+### 3.6 Checkpoint Resume 機制
+
+**Checkpoint 恢復執行**可以從中斷點繼續，而非從頭開始。
+
+**Resume 參數:**
+- `resume_round`: 恢復起始輪數（1-based）
+- `resume_line`: 恢復起始行數（1-based）
+- `resume_phase`: 恢復起始階段（AS Mode: 1=Query, 2=Coding）
+
+**程式碼流程:**
+| Location | Function | Purpose |
+|----------|----------|---------|
+| `main.py:108-117` | `run()` | 從 checkpoint 讀取 resume 參數 |
+| `main.py:683-700` | `_execute_project_automation()` | 傳遞 resume 給 CopilotHandler 或 AS Mode |
+| `copilot_handler.py:79-96` | `set_resume_state()` | 設置 Non-AS Mode 的 resume 狀態 |
+| `copilot_handler.py:1269-1276` | `_process_project_with_project_prompts()` | 從 resume_round 開始迴圈 |
+| `artificial_suicide_mode.py:36-45` | `__init__()` | 接受 resume 參數 |
+| `artificial_suicide_mode.py:403-410` | `execute()` | 從 resume_round 開始迴圈 |
+
+### 3.7 CWE Scan timing relative to Keep/Undo
 
 **AS Mode** (in `_execute_phase2()`):
 ```python
@@ -142,8 +178,9 @@ scan_success, scan_files, vuln_info = self.cwe_scan_manager.scan_from_prompt_fun
 ## 5. Key CSV schemas
 - **function_level_scan.csv** (Non-AS Mode): `輪數,行號,檔案路徑,函式名稱,漏洞數量,漏洞行號,掃描器,信心度,嚴重性,問題描述,掃描狀態,失敗原因`
 - **function_level_scan.csv** (AS Mode): includes `修改前函式名稱,修改後函式名稱` columns
-- **query_statistics.csv** (Non-AS): `檔案路徑,函式名稱,round1,...,roundN,漏洞出現次數`
-- **query_statistics.csv** (AS): `檔案路徑,函式名稱,round1,...,roundN,QueryTimes` (uses `#` for skipped rounds)
+- **query_statistics.csv** (Non-AS): `檔案路徑,函式名稱,round0,round1,...,roundN,漏洞出現次數`
+- **query_statistics.csv** (AS): `檔案路徑,函式名稱,round0,round1,...,roundN,QueryTimes` (uses `#` for skipped rounds)
+- **round0 欄位**: 記錄原始狀態（攻擊前）的漏洞數量，格式: `數量 (掃描器)` 或 `0`
 
 ## 6. Project‑specific conventions
 - **Prompt format**: `path/to/file.py|function_name` (one per line in `projects/{project}/prompt.txt`)

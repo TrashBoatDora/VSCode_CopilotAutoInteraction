@@ -112,7 +112,8 @@ class CheckpointManager:
                 "current_line": 1,
                 "current_phase": 1,  # AS Mode: 1=Query, 2=Coding (Non-AS Mode 始終為 1)
                 "completed_projects": [],
-                "total_files_processed": 0  # 追蹤已處理的檔案數
+                "total_files_processed": 0,  # 追蹤已處理的檔案數
+                "baseline_scan_completed": {}  # 記錄每個專案的原始狀態掃描是否已完成
             },
             "status": "in_progress"
         }
@@ -132,7 +133,8 @@ class CheckpointManager:
         current_phase: int = None,
         completed_project: str = None,
         files_processed_increment: int = None,
-        total_files_processed: int = None
+        total_files_processed: int = None,
+        baseline_scan_completed: str = None
     ) -> None:
         """
         Update checkpoint progress during execution.
@@ -146,6 +148,7 @@ class CheckpointManager:
             completed_project: Name of project that just completed
             files_processed_increment: Number of files to add to total
             total_files_processed: Set total files processed directly
+            baseline_scan_completed: 標記指定專案的原始狀態掃描已完成
         """
         if self._current_checkpoint is None:
             logger.warning("無法更新進度: 沒有活動的檢查點")
@@ -170,9 +173,30 @@ class CheckpointManager:
             progress["total_files_processed"] = progress.get("total_files_processed", 0) + files_processed_increment
         if total_files_processed is not None:
             progress["total_files_processed"] = total_files_processed
+        if baseline_scan_completed is not None:
+            if "baseline_scan_completed" not in progress:
+                progress["baseline_scan_completed"] = {}
+            progress["baseline_scan_completed"][baseline_scan_completed] = True
         
         self._current_checkpoint["updated_at"] = datetime.now().isoformat()
         self._save_checkpoint()
+    
+    def is_baseline_scan_completed(self, project_name: str) -> bool:
+        """
+        檢查指定專案的原始狀態掃描是否已完成
+        
+        Args:
+            project_name: 專案名稱
+            
+        Returns:
+            bool: True = 已完成，False = 未完成或無記錄
+        """
+        if self._current_checkpoint is None:
+            return False
+        
+        progress = self._current_checkpoint.get("progress", {})
+        baseline_completed = progress.get("baseline_scan_completed", {})
+        return baseline_completed.get(project_name, False)
     
     def mark_completed(self) -> None:
         """Mark the current execution as completed successfully."""

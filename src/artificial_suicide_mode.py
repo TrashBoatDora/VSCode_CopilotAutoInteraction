@@ -31,7 +31,8 @@ class ArtificialSuicideMode:
     def __init__(self, copilot_handler, vscode_controller, cwe_scan_manager, 
                  error_handler, project_path: str, target_cwe: str, total_rounds: int,
                  max_files_limit: int = 0, files_processed_so_far: int = 0,
-                 checkpoint_manager=None):
+                 checkpoint_manager=None, resume_round: int = 1, resume_line: int = 1,
+                 resume_phase: int = 1):
         """
         初始化 AS 模式控制器
         
@@ -46,6 +47,9 @@ class ArtificialSuicideMode:
             max_files_limit: 最大檔案處理限制（0 表示無限制）
             files_processed_so_far: 目前已處理的檔案數
             checkpoint_manager: 檢查點管理器（用於記錄執行進度）
+            resume_round: 恢復起始輪數（1-based，預設為 1）
+            resume_line: 恢復起始行數（1-based，預設為 1）
+            resume_phase: 恢復起始階段（1=Query, 2=Coding，預設為 1）
         """
         self.logger = get_logger("ArtificialSuicide")
         self.copilot_handler = copilot_handler
@@ -57,6 +61,15 @@ class ArtificialSuicideMode:
         self.total_rounds = total_rounds
         self.checkpoint_manager = checkpoint_manager  # 檢查點管理器
         
+        # Resume 狀態
+        self.resume_round = resume_round
+        self.resume_line = resume_line
+        self.resume_phase = resume_phase
+        self.is_resume_mode = (resume_round > 1 or resume_line > 1 or resume_phase > 1)
+        
+        if self.is_resume_mode:
+            self.logger.info(f"🔄 AS Mode 恢復模式: 從第 {resume_round} 輪 Phase {resume_phase} 第 {resume_line} 行繼續")
+        
         # 檔案數量限制相關
         self.max_files_limit = max_files_limit
         self.files_processed_so_far = files_processed_so_far
@@ -67,8 +80,7 @@ class ArtificialSuicideMode:
         
         # 載入 CWE 範例程式碼
         self.cwe_example_code = self._load_cwe_example_code()
-        
-        # 載入專案的 prompt.txt
+                # 載入專案的 prompt.txt
         self.prompt_lines = self._load_prompt_lines()
         original_line_count = len(self.prompt_lines)  # 記錄原始行數
         
@@ -313,6 +325,7 @@ class ArtificialSuicideMode:
             time.sleep(3)  # 等待專案完全載入
             
             # 步驟 0.5：初始化 Query 統計 CSV
+            # 在 resume 模式下跳過初始化，避免覆蓋已有的掃描結果
             self.logger.info("📊 初始化 Query 統計...")
             # 解析每一行，只取第一個函數
             function_list = []
@@ -325,7 +338,8 @@ class ArtificialSuicideMode:
                 project_name=self.project_path.name,
                 cwe_type=self.target_cwe,
                 total_rounds=self.total_rounds,
-                function_list=function_list
+                function_list=function_list,
+                skip_if_exists=self.is_resume_mode  # Resume 模式下跳過初始化
             )
             
             # 步驟 0.6：初始化函式名稱追蹤器
@@ -344,12 +358,23 @@ class ArtificialSuicideMode:
             self.vicious_pattern_manager = create_vicious_pattern_manager(
                 project_name=self.project_path.name,
                 project_path=self.project_path,
-                cwe_type=self.target_cwe
+                cwe_type=self.target_cwe,
+                load_existing=self.is_resume_mode  # Resume 模式下載入現有狀態
             )
             
             # 步驟 0.8：執行原始狀態掃描（攻擊前基線掃描）
+            # 只有在非恢復模式或原始掃描尚未完成時才執行
             baseline_results = {}
-            if self.cwe_scan_manager:
+            should_do_baseline_scan = True
+            
+            if self.checkpoint_manager:
+                # 檢查此專案的原始狀態掃描是否已完成
+                if self.checkpoint_manager.is_baseline_scan_completed(self.project_path.name):
+                    self.logger.info("📸 原始狀態掃描已在先前執行中完成，跳過...")
+                    should_do_baseline_scan = False
+                    self.baseline_results = {}  # 恢復模式下不會有 baseline_results
+            
+            if should_do_baseline_scan and self.cwe_scan_manager:
                 self.logger.info("📸 執行原始狀態掃描（攻擊前基線）...")
                 baseline_results = self.cwe_scan_manager.scan_baseline_state(
                     project_path=self.project_path,
@@ -358,15 +383,37 @@ class ArtificialSuicideMode:
                     cwe_type=self.target_cwe
                 )
                 self.baseline_results = baseline_results  # 儲存以供後續比較報告使用
-            else:
+                
+                # 更新 query_statistics 中的原始狀態結果（round0）
+                if self.query_stats and baseline_results:
+                    self.logger.info("📊 更新原始狀態統計（round0）...")
+                    self.query_stats.update_baseline_result(baseline_results)
+                
+                # 標記原始狀態掃描已完成
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.update_progress(
+                        baseline_scan_completed=self.project_path.name
+                    )
+                    self.logger.info("✅ 原始狀態掃描完成，已更新 checkpoint")
+            elif not self.cwe_scan_manager:
                 self.logger.warning("⚠️  未設置 CWE 掃描管理器，跳過原始狀態掃描")
                 self.baseline_results = {}
             
+            # 確定起始輪數（考慮恢復模式）
+            start_round = self.resume_round if self.is_resume_mode else 1
+            if start_round > 1:
+                self.logger.info(f"🔄 恢復模式: 從第 {start_round} 輪開始（跳過前 {start_round - 1} 輪）")
+            
             # 執行每一輪
-            for round_num in range(1, self.total_rounds + 1):
+            for round_num in range(start_round, self.total_rounds + 1):
                 self.logger.create_separator(f"📍 第 {round_num}/{self.total_rounds} 輪")
                 
-                success = self._execute_round(round_num)
+                # 確定本輪是否為恢復輪次（需要特殊處理 phase 和 line）
+                is_resume_round = self.is_resume_mode and round_num == start_round
+                resume_phase = self.resume_phase if is_resume_round else 1
+                resume_line = self.resume_line if is_resume_round else 1
+                
+                success = self._execute_round(round_num, resume_phase=resume_phase, resume_line=resume_line)
                 
                 if not success:
                     self.logger.error(f"❌ 第 {round_num} 輪執行失敗")
@@ -414,12 +461,14 @@ class ArtificialSuicideMode:
             except Exception as e:
                 self.logger.error(f"❌ 生成比較報告失敗: {e}")
     
-    def _execute_round(self, round_num: int) -> bool:
+    def _execute_round(self, round_num: int, resume_phase: int = 1, resume_line: int = 1) -> bool:
         """
         執行單輪攻擊（兩道程序）
         
         Args:
             round_num: 輪數
+            resume_phase: 恢復起始階段（1=Query, 2=Coding，預設為 1）
+            resume_line: 恢復起始行數（1-based，預設為 1）
             
         Returns:
             bool: 是否成功
@@ -428,32 +477,41 @@ class ArtificialSuicideMode:
         if self.checkpoint_manager:
             self.checkpoint_manager.update_progress(
                 current_round=round_num,
-                current_line=1,
-                current_phase=1  # AS Mode Phase 1 開始
+                current_line=resume_line,
+                current_phase=resume_phase
             )
         
         # === 第 1 道程序：Query Phase ===
-        self.logger.info(f"▶️  第 {round_num} 輪 - 第 1 道程序（Query Phase）")
-        
-        if not self._execute_phase1(round_num):
-            return False
-        
-        # Keep 修改（使用現有功能）
-        self.logger.info("  💾 Keep 修改...")
-        self.vscode_controller.clear_copilot_memory(modification_action="keep")
-        time.sleep(2)
-        
-        # 更新 checkpoint: Phase 2 開始
-        if self.checkpoint_manager:
-            self.checkpoint_manager.update_progress(
-                current_phase=2,  # AS Mode Phase 2 開始
-                current_line=1
-            )
+        # 只有當 resume_phase == 1 時才執行 Phase 1
+        if resume_phase <= 1:
+            self.logger.info(f"▶️  第 {round_num} 輪 - 第 1 道程序（Query Phase）")
+            
+            if not self._execute_phase1(round_num, start_line=resume_line if resume_phase == 1 else 1):
+                return False
+            
+            # Keep 修改（使用現有功能）
+            self.logger.info("  💾 Keep 修改...")
+            self.vscode_controller.clear_copilot_memory(modification_action="keep")
+            time.sleep(2)
+            
+            # 更新 checkpoint: Phase 2 開始
+            if self.checkpoint_manager:
+                self.checkpoint_manager.update_progress(
+                    current_phase=2,  # AS Mode Phase 2 開始
+                    current_line=1
+                )
+            
+            # Phase 1 完成後，Phase 2 從第 1 行開始
+            phase2_start_line = 1
+        else:
+            # 恢復模式跳過 Phase 1
+            self.logger.info(f"🔄 恢復模式: 跳過第 {round_num} 輪 Phase 1，直接進入 Phase 2")
+            phase2_start_line = resume_line
         
         # === 第 2 道程序：Coding Phase + Scan ===
         self.logger.info(f"▶️  第 {round_num} 輪 - 第 2 道程序（Coding Phase + Scan）")
         
-        if not self._execute_phase2(round_num):
+        if not self._execute_phase2(round_num, start_line=phase2_start_line):
             return False
         
         # Undo 修改（使用現有功能）
@@ -477,13 +535,24 @@ class ArtificialSuicideMode:
         
         return True
     
-    def _execute_phase1(self, round_num: int) -> bool:
+    def _execute_phase1(self, round_num: int, start_line: int = 1) -> bool:
         """
         執行第 1 道程序：Query Phase
         手動處理每一行以支援 AS 專用的檔案結構
+        
+        Args:
+            round_num: 輪數
+            start_line: 起始行數（用於恢復模式，1-based，預設為 1）
         """
         try:
             self.logger.info(f"  開始處理第 1 道程序（共 {len(self.prompt_lines)} 行）")
+            
+            # 處理恢復模式
+            if start_line > 1:
+                if start_line > len(self.prompt_lines):
+                    self.logger.info(f"  🔄 恢復模式: 起始行 {start_line} 超出總行數 {len(self.prompt_lines)}，Phase 1 已完成")
+                    return True
+                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始（跳過前 {start_line - 1} 行）")
             
             # 開啟 Copilot Chat（如果尚未開啟）
             if not self.copilot_handler.open_copilot_chat():
@@ -498,6 +567,10 @@ class ArtificialSuicideMode:
                 self.round_responses[round_num] = {}
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
+                # 跳過恢復模式下已完成的行
+                if line_idx < start_line:
+                    continue
+                    
                 # 更新 checkpoint: 記錄 Phase 1 當前處理的行數
                 if self.checkpoint_manager:
                     self.checkpoint_manager.update_progress(current_line=line_idx)
@@ -753,13 +826,24 @@ class ArtificialSuicideMode:
             self.logger.error(f"  ❌ 第 1 道執行錯誤: {e}")
             return False
     
-    def _execute_phase2(self, round_num: int) -> bool:
+    def _execute_phase2(self, round_num: int, start_line: int = 1) -> bool:
         """
         執行第 2 道程序：Coding Phase + Scan
         手動處理每一行以支援 AS 專用的檔案結構
+        
+        Args:
+            round_num: 輪數
+            start_line: 起始行數（用於恢復模式，1-based，預設為 1）
         """
         try:
             self.logger.info(f"  開始處理第 2 道程序（共 {len(self.prompt_lines)} 行）")
+            
+            # 處理恢復模式
+            if start_line > 1:
+                if start_line > len(self.prompt_lines):
+                    self.logger.info(f"  🔄 恢復模式: 起始行 {start_line} 超出總行數 {len(self.prompt_lines)}，Phase 2 已完成")
+                    return True
+                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始（跳過前 {start_line - 1} 行）")
             
             # 開啟 Copilot Chat（應該已經開啟）
             if not self.copilot_handler.is_chat_open:
@@ -771,6 +855,10 @@ class ArtificialSuicideMode:
             failed_lines = []
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
+                # 跳過恢復模式下已完成的行
+                if line_idx < start_line:
+                    continue
+                    
                 # 更新 checkpoint: 記錄 Phase 2 當前處理的行數
                 if self.checkpoint_manager:
                     self.checkpoint_manager.update_progress(current_line=line_idx)

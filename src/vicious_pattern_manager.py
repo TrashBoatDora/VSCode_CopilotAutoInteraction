@@ -65,6 +65,70 @@ class ViciousPatternManager:
         self.logger.info(f"   專案: {project_name}")
         self.logger.info(f"   輸出目錄: {self.project_output_dir}")
     
+    def load_existing_state(self) -> bool:
+        """
+        載入現有的備份狀態（用於 resume 模式）
+        
+        從 vicious_pattern 目錄中掃描已備份的檔案，
+        以避免 resume 時丟失之前的記錄
+        
+        Returns:
+            bool: 是否成功載入
+        """
+        try:
+            if not self.project_output_dir.exists():
+                self.logger.debug("輸出目錄不存在，無需載入現有狀態")
+                return True
+            
+            # 掃描已備份的檔案
+            loaded_files = 0
+            for file_path in self.project_output_dir.rglob("*.py"):
+                # 計算相對路徑
+                relative_path = str(file_path.relative_to(self.project_output_dir))
+                if relative_path not in self.backed_up_files:
+                    self.backed_up_files.add(relative_path)
+                    loaded_files += 1
+            
+            # 嘗試從現有的 prompt.txt 載入漏洞函式記錄
+            prompt_file = self.project_output_dir / "prompt.txt"
+            loaded_functions = 0
+            if prompt_file.exists():
+                with open(prompt_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or '|' not in line:
+                            continue
+                        parts = line.split('|')
+                        if len(parts) != 2:
+                            continue
+                        file_path = parts[0].strip()
+                        func_part = parts[1].strip()
+                        # 解析函式名稱（可能有多個，用頓號分隔）
+                        func_names = [f.strip() for f in func_part.replace('、', ',').split(',')]
+                        for func_name in func_names:
+                            if func_name:
+                                # 創建 VulnerableFunction 記錄（round_number 設為 0 表示載入的歷史記錄）
+                                # 這些記錄已經 backed_up
+                                vuln_func = VulnerableFunction(
+                                    file_path=file_path,
+                                    function_name=func_name,
+                                    round_number=0,  # 歷史記錄
+                                    vulnerability_count=1,
+                                    scanner="(loaded)",
+                                    backed_up=True
+                                )
+                                self.vulnerable_functions.append(vuln_func)
+                                loaded_functions += 1
+            
+            if loaded_files > 0 or loaded_functions > 0:
+                self.logger.info(f"📥 載入現有備份狀態：{loaded_files} 個檔案，{loaded_functions} 個漏洞函式")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 載入現有狀態時發生錯誤: {e}")
+            return False
+    
     def add_vulnerable_function(self, file_path: str, function_name: str, 
                                  round_number: int, vulnerability_count: int = 1,
                                  scanner: str = "") -> None:
@@ -308,7 +372,8 @@ class ViciousPatternManager:
 
 
 def create_vicious_pattern_manager(project_name: str, project_path: Path, 
-                                    cwe_type: str) -> ViciousPatternManager:
+                                    cwe_type: str,
+                                    load_existing: bool = False) -> ViciousPatternManager:
     """
     便捷函式：建立 ViciousPatternManager 實例
     
@@ -316,8 +381,12 @@ def create_vicious_pattern_manager(project_name: str, project_path: Path,
         project_name: 專案名稱
         project_path: 專案完整路徑
         cwe_type: CWE 類型
+        load_existing: 是否載入現有狀態（resume 模式時設為 True）
         
     Returns:
         ViciousPatternManager: 管理器實例
     """
-    return ViciousPatternManager(project_name, project_path, cwe_type)
+    manager = ViciousPatternManager(project_name, project_path, cwe_type)
+    if load_existing:
+        manager.load_existing_state()
+    return manager

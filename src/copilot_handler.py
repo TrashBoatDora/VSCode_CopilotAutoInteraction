@@ -70,9 +70,31 @@ class CopilotHandler:
         self._clipboard_lock = False  # 剪貼簿鎖定狀態，避免併發衝突
         self.query_stats = None  # 查詢統計器（用於非 AS Mode 的統計）
         
+        # Resume 狀態（用於從中斷點繼續執行）
+        self.resume_round = 1  # 恢復起始輪數
+        self.resume_line = 1   # 恢復起始行數
+        self.is_resume_mode = False  # 是否處於恢復模式
+        
         self.logger.info("Copilot Chat 處理器初始化完成")
         if cwe_scan_manager and cwe_scan_settings and cwe_scan_settings.get("enabled"):
             self.logger.info(f"✅ CWE 掃描已啟用 (類型: CWE-{cwe_scan_settings.get('cwe_type')})")
+
+    def set_resume_state(self, resume_round: int = 1, resume_line: int = 1):
+        """
+        設置恢復狀態（用於從中斷點繼續執行）
+        
+        Args:
+            resume_round: 恢復起始輪數（1-based）
+            resume_line: 恢復起始行數（1-based）
+        """
+        self.resume_round = resume_round
+        self.resume_line = resume_line
+        self.is_resume_mode = (resume_round > 1 or resume_line > 1)
+        
+        if self.is_resume_mode:
+            self.logger.info(f"🔄 設置恢復狀態: 從第 {resume_round} 輪第 {resume_line} 行繼續")
+        else:
+            self.logger.debug("恢復狀態: 從頭開始執行")
 
     def _ensure_completion_instruction(self, prompt: str) -> str:
         """確保提示詞包含完成回報指示"""
@@ -869,7 +891,8 @@ class CopilotHandler:
             return False
     
     def process_project_with_line_by_line(self, project_path: str, round_number: int = 1, 
-                                        use_smart_wait: bool = None, max_lines: int = None) -> Tuple[bool, int, List[str]]:
+                                        use_smart_wait: bool = None, max_lines: int = None,
+                                        start_line: int = 1) -> Tuple[bool, int, List[str]]:
         """
         使用專案專用提示詞模式處理專案（按行發送）
         支援累積串接功能：每次將當前回應串接到下一行提示詞前面
@@ -879,6 +902,7 @@ class CopilotHandler:
             round_number: 當前互動輪數
             use_smart_wait: 是否使用智能等待
             max_lines: 最大處理行數限制（None 表示無限制）
+            start_line: 起始行數（用於恢復模式，1-based，預設為 1）
             
         Returns:
             Tuple[bool, int, List[str]]: (是否成功, 成功處理的行數, 失敗的行列表)
@@ -901,6 +925,14 @@ class CopilotHandler:
                 self.logger.info(f"📊 檔案限制已啟用: 原有 {original_line_count} 行，限制處理前 {max_lines} 行")
             
             total_lines = len(prompt_lines)
+            
+            # 處理恢復模式：跳過已完成的行
+            if start_line > 1:
+                if start_line > total_lines:
+                    self.logger.info(f"🔄 恢復模式: 起始行 {start_line} 超出總行數 {total_lines}，本輪已完成")
+                    return True, 0, []
+                self.logger.info(f"🔄 恢復模式: 從第 {start_line} 行開始（跳過前 {start_line - 1} 行）")
+            
             self.logger.info(f"開始按行處理專案 {project_name}，共 {total_lines} 行提示詞")
             
             # 檢查是否啟用回應串接功能
@@ -928,8 +960,12 @@ class CopilotHandler:
                 self.logger.error(error_msg)
                 return False, 0, [error_msg]
             
-            # 逐行處理
+            # 逐行處理（從 start_line 開始）
             for line_num, original_prompt_line in enumerate(prompt_lines, 1):
+                # 跳過恢復模式下已完成的行
+                if line_num < start_line:
+                    continue
+                    
                 line_success = False
                 retry_count = 0
                 
@@ -1192,13 +1228,48 @@ class CopilotHandler:
                         if filepath and first_function:
                             function_list.append(f"{filepath}_{first_function}")
                     
+                    # 在 resume 模式下跳過 CSV 初始化，避免覆蓋已有的掃描結果
                     self.query_stats = initialize_non_as_mode_statistics(
                         project_name=project_name,
                         cwe_type=cwe_type,
                         total_rounds=max_rounds,
-                        function_list=function_list
+                        function_list=function_list,
+                        skip_if_exists=self.is_resume_mode  # Resume 模式下跳過初始化
                     )
                     self.logger.info(f"✅ 非 AS Mode 統計初始化完成 ({len(function_list)} 個函式)")
+            
+            # 執行原始狀態掃描（在第一輪開始前）
+            # 只有在非恢復模式或原始掃描尚未完成時才執行
+            if self.cwe_scan_manager and self.cwe_scan_settings and self.cwe_scan_settings.get("enabled"):
+                should_do_baseline_scan = True
+                
+                if self.checkpoint_manager:
+                    # 檢查此專案的原始狀態掃描是否已完成
+                    if self.checkpoint_manager.is_baseline_scan_completed(project_name):
+                        self.logger.info("📸 原始狀態掃描已在先前執行中完成，跳過...")
+                        should_do_baseline_scan = False
+                
+                if should_do_baseline_scan:
+                    self.logger.info("📸 執行原始狀態掃描（互動開始前基線）...")
+                    cwe_type = self.cwe_scan_settings.get("cwe_type", "")
+                    baseline_results = self.cwe_scan_manager.scan_baseline_state(
+                        project_path=Path(project_path),
+                        project_name=project_name,
+                        prompt_lines=prompt_lines[:max_lines] if max_lines else prompt_lines,
+                        cwe_type=cwe_type
+                    )
+                    
+                    # 更新 query_statistics 中的原始狀態結果（round0）
+                    if self.query_stats and baseline_results:
+                        self.logger.info("📊 更新原始狀態統計（round0）...")
+                        self.query_stats.update_baseline_result(baseline_results)
+                    
+                    # 標記原始狀態掃描已完成
+                    if self.checkpoint_manager:
+                        self.checkpoint_manager.update_progress(
+                            baseline_scan_completed=project_name
+                        )
+                        self.logger.info("✅ 原始狀態掃描完成，已更新 checkpoint")
             
             # 追蹤每一輪的成功狀態
             overall_success = True
@@ -1215,8 +1286,13 @@ class CopilotHandler:
                 config.COPILOT_CHAT_MODIFICATION_ACTION
             )
             
+            # 確定起始輪數（考慮恢復模式）
+            start_round = self.resume_round if self.is_resume_mode else 1
+            if start_round > 1:
+                self.logger.info(f"🔄 恢復模式: 從第 {start_round} 輪開始（跳過前 {start_round - 1} 輪）")
+            
             # 進行多輪互動
-            for round_num in range(1, max_rounds + 1):
+            for round_num in range(start_round, max_rounds + 1):
                 self.logger.create_separator(f"專案專用模式：開始第 {round_num} 輪互動")
                 
                 # 更新 checkpoint: 記錄當前輪數開始
@@ -1227,13 +1303,20 @@ class CopilotHandler:
                         current_phase=1  # Non-AS Mode 始終為 phase 1
                     )
                 
-                # 處理本輪的按行互動（傳遞 max_lines 限制）
+                # 確定本輪的起始行數（僅恢復模式的第一輪需要跳過）
+                start_line = 1
+                if self.is_resume_mode and round_num == start_round and self.resume_line > 1:
+                    start_line = self.resume_line
+                    self.logger.info(f"🔄 恢復模式: 本輪從第 {start_line} 行開始")
+                
+                # 處理本輪的按行互動（傳遞 max_lines 限制和起始行數）
                 success, successful_lines, failed_lines = self.process_project_with_line_by_line(
-                    project_path, round_number=round_num, max_lines=max_lines
+                    project_path, round_number=round_num, max_lines=max_lines, start_line=start_line
                 )
                 
-                # 只在第一輪記錄實際處理的行數
-                if round_num == 1:
+                # 記錄實際處理的行數（第一個執行的輪次）
+                # 注意：resume 模式下 start_round 可能不是 1，所以改用 start_round 判斷
+                if round_num == start_round:
                     first_round_successful_lines = successful_lines
                 
                 if success:

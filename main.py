@@ -64,6 +64,7 @@ class HybridUIAutomationScript:
         self.resume_project_index = 0  # 恢復起始專案索引
         self.resume_round = 1  # 恢復起始輪數
         self.resume_line = 1  # 恢復起始行數
+        self.resume_phase = 1  # 恢復起始階段（AS Mode: 1=Query, 2=Coding）
         
         # 執行統計
         self.total_projects = 0
@@ -108,10 +109,11 @@ class HybridUIAutomationScript:
                 self.resume_project_index = resume_info['resume_from']['project_index']
                 self.resume_round = resume_info['resume_from']['round']
                 self.resume_line = resume_info['resume_from']['line']
+                self.resume_phase = resume_info['resume_from'].get('phase', 1)  # AS Mode phase
                 
                 self.logger.info(f"🔄 恢復模式已啟用")
                 self.logger.info(f"   從專案索引 {self.resume_project_index} ({resume_info['resume_from']['project_name']}) 開始")
-                self.logger.info(f"   從輪數 {self.resume_round}, 行數 {self.resume_line} 開始")
+                self.logger.info(f"   從輪數 {self.resume_round}, Phase {self.resume_phase}, 行數 {self.resume_line} 開始")
                 self.logger.info(f"   已處理檔案: {self.total_files_processed}/{self.max_files_limit}")
                 self.logger.info(f"   剩餘配額: {resume_info.get('remaining_files_quota', 'N/A')}")
             else:
@@ -532,25 +534,34 @@ class HybridUIAutomationScript:
                 if success:
                     total_success += 1
                     self.successful_projects += 1
-                    # 更新檢查點：記錄專案完成和已處理檔案數
+                    # 更新檢查點：記錄專案完成、已處理檔案數，並重置 round/line/phase 為初始值
+                    # 這樣如果下一個專案中斷，checkpoint 會有正確的初始狀態
                     self.checkpoint_manager.update_progress(
                         completed_project=project.name,
-                        total_files_processed=self.total_files_processed
+                        total_files_processed=self.total_files_processed,
+                        current_round=1,
+                        current_line=1,
+                        current_phase=1
                     )
                 else:
                     total_failed += 1
                     self.failed_projects += 1
-                    # 即使失敗也更新已處理檔案數
+                    # 即使失敗也更新已處理檔案數，並重置 round/line/phase
                     self.checkpoint_manager.update_progress(
-                        total_files_processed=self.total_files_processed
+                        total_files_processed=self.total_files_processed,
+                        current_round=1,
+                        current_line=1,
+                        current_phase=1
                     )
                 
                 self.processed_projects += 1
                 
-                # 重置恢復模式的輪數和行數（下一個專案從頭開始）
+                # 重置恢復模式的輪數、行數和階段（當前恢復專案處理完成後，下一個專案從頭開始）
                 if self.resume_mode and i == self.resume_project_index:
                     self.resume_round = 1
                     self.resume_line = 1
+                    self.resume_phase = 1
+                    self.logger.info("🔄 恢復專案處理完成，後續專案將從頭開始")
                 
                 # 項目間短暫休息
                 time.sleep(2)
@@ -680,7 +691,17 @@ class HybridUIAutomationScript:
             if artificial_suicide_mode:
                 # 使用 Artificial Suicide 攻擊模式
                 project_logger.log(f"處理 Copilot Chat (Artificial Suicide 攻擊模式，輪數: {artificial_suicide_rounds})")
-                success, files_processed = self._execute_artificial_suicide_mode(project, artificial_suicide_rounds, project_logger, max_lines=max_lines)
+                
+                # 確定是否為恢復專案（需要傳遞 resume 參數）
+                is_resume_project = self.resume_mode and project.name == self.checkpoint_manager._current_checkpoint['progress'].get('current_project_name')
+                resume_round = self.resume_round if is_resume_project else 1
+                resume_line = self.resume_line if is_resume_project else 1
+                resume_phase = self.resume_phase if is_resume_project else 1
+                
+                success, files_processed = self._execute_artificial_suicide_mode(
+                    project, artificial_suicide_rounds, project_logger, max_lines=max_lines,
+                    resume_round=resume_round, resume_line=resume_line, resume_phase=resume_phase
+                )
                 
                 # 更新檔案計數器（使用實際處理數量）
                 self.total_files_processed += files_processed
@@ -691,6 +712,18 @@ class HybridUIAutomationScript:
             elif interaction_enabled:
                 # 使用反覆互動功能
                 project_logger.log(f"處理 Copilot Chat (啟用反覆互動功能，最大輪數: {max_rounds})")
+                
+                # 確定是否為恢復專案（需要傳遞 resume 參數）
+                is_resume_project = self.resume_mode and project.name == self.checkpoint_manager._current_checkpoint['progress'].get('current_project_name')
+                if is_resume_project:
+                    self.copilot_handler.set_resume_state(
+                        resume_round=self.resume_round,
+                        resume_line=self.resume_line
+                    )
+                else:
+                    # 非恢復專案，重置 resume 狀態
+                    self.copilot_handler.set_resume_state(resume_round=1, resume_line=1)
+                
                 success, files_processed = self.copilot_handler.process_project_with_iterations(project.path, max_rounds, max_lines=max_lines)
                 
                 # 更新檔案計數器（使用實際處理數量）
@@ -814,7 +847,10 @@ class HybridUIAutomationScript:
         project: ProjectInfo, 
         num_rounds: int,
         project_logger,
-        max_lines: int = None
+        max_lines: int = None,
+        resume_round: int = 1,
+        resume_line: int = 1,
+        resume_phase: int = 1
     ) -> Tuple[bool, int]:
         """
         執行 Artificial Suicide 攻擊模式
@@ -824,6 +860,9 @@ class HybridUIAutomationScript:
             num_rounds: 攻擊輪數
             project_logger: 專案日誌記錄器
             max_lines: 最大處理行數限制（None 表示無限制）
+            resume_round: 恢復起始輪數（1-based，預設為 1）
+            resume_line: 恢復起始行數（1-based，預設為 1）
+            resume_phase: 恢復起始階段（1=Query, 2=Coding，預設為 1）
             
         Returns:
             Tuple[bool, int]: (執行是否成功, 實際處理的檔案數)
@@ -848,8 +887,10 @@ class HybridUIAutomationScript:
                         break
             
             self.logger.info(f"初始化 Artificial Suicide Mode: 專案={project_name}, CWE-{target_cwe}, 輪數={num_rounds}")
+            if resume_round > 1 or resume_line > 1 or resume_phase > 1:
+                self.logger.info(f"🔄 恢復模式: 從第 {resume_round} 輪 Phase {resume_phase} 第 {resume_line} 行繼續")
             
-            # 初始化 ArtificialSuicideMode（直接利用現有模組，並傳遞檔案限制）
+            # 初始化 ArtificialSuicideMode（直接利用現有模組，並傳遞檔案限制和 resume 參數）
             as_mode = ArtificialSuicideMode(
                 copilot_handler=self.copilot_handler,
                 vscode_controller=self.vscode_controller,
@@ -860,7 +901,10 @@ class HybridUIAutomationScript:
                 total_rounds=num_rounds,
                 max_files_limit=self.max_files_limit,
                 files_processed_so_far=self.total_files_processed,
-                checkpoint_manager=self.checkpoint_manager  # 傳遞 checkpoint 管理器
+                checkpoint_manager=self.checkpoint_manager,
+                resume_round=resume_round,
+                resume_line=resume_line,
+                resume_phase=resume_phase
             )
             
             # 執行攻擊流程
@@ -888,6 +932,10 @@ class HybridUIAutomationScript:
         """
         執行 CWE 函式級別掃描（逐行模式）
         
+        ⚠️ DEPRECATED: 此方法已不再被使用。
+        CWE 掃描現在在 Copilot 互動期間執行（copilot_handler.py 中的 _perform_cwe_scan_for_prompt）。
+        保留此方法僅作為參考，未來版本可能會移除。
+        
         Args:
             project: 專案資訊
             project_logger: 專案日誌記錄器
@@ -895,6 +943,13 @@ class HybridUIAutomationScript:
         Returns:
             bool: 掃描是否成功
         """
+        import warnings
+        warnings.warn(
+            "_execute_cwe_scan() is deprecated. CWE scanning is now performed during Copilot interaction.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        
         try:
             if not self.cwe_scan_manager:
                 self.logger.warning("CWE 掃描管理器未初始化")

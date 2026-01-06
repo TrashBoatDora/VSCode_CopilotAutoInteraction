@@ -68,14 +68,14 @@ class QueryStatistics:
         
         self.logger.info(f"初始化 Query 統計器 - 專案: {project_name}, CWE-{cwe_type}, {total_rounds} 輪")
     
-    def initialize_csv(self, force: bool = False) -> bool:
+    def initialize_csv(self, skip_if_exists: bool = False) -> bool:
         """
         初始化 CSV 檔案（只在開始時執行一次）
         
         建立檔案結構，所有欄位初始為空白
         
         Args:
-            force: 是否強制覆蓋已存在的檔案（預設 False）
+            skip_if_exists: 如果為 True 且 CSV 已存在，則跳過初始化（用於 resume 模式）
         
         Returns:
             bool: 是否成功初始化
@@ -84,13 +84,13 @@ class QueryStatistics:
             # 確保資料夾存在
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # 檢查檔案是否已存在
-            if self.csv_path.exists() and not force:
-                self.logger.info(f"📄 CSV 檔案已存在，跳過初始化: {self.csv_path}")
+            # 如果啟用 skip_if_exists 且檔案已存在，跳過初始化
+            if skip_if_exists and self.csv_path.exists():
+                self.logger.info(f"✅ CSV 已存在，跳過初始化（Resume 模式）: {self.csv_path}")
                 return True
             
-            # 準備表頭
-            headers = ['檔案路徑', '函式名稱'] + \
+            # 準備表頭（包含 round0 作為原始狀態掃描結果）
+            headers = ['檔案路徑', '函式名稱', 'round0'] + \
                      [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
                      ['QueryTimes']
             
@@ -105,8 +105,8 @@ class QueryStatistics:
                     # 分離檔案路徑和函數名稱
                     filepath, function_name = self._split_function_key(function_key)
                     
-                    # 初始行：檔案路徑 + 函數名稱 + 空欄位
-                    row = [filepath, function_name] + [''] * (self.total_rounds + 1)
+                    # 初始行：檔案路徑 + 函數名稱 + 空欄位（round0 + round1-N + QueryTimes）
+                    row = [filepath, function_name] + [''] * (self.total_rounds + 2)
                     writer.writerow(row)
             
             self.logger.info(f"✅ 初始化 CSV: {self.csv_path} ({len(self.function_list)} 個函式)")
@@ -114,6 +114,63 @@ class QueryStatistics:
             
         except Exception as e:
             self.logger.error(f"❌ 初始化 CSV 時發生錯誤: {e}")
+            return False
+    
+    def update_baseline_result(self, baseline_results: dict) -> bool:
+        """
+        更新原始狀態掃描結果（round0）
+        
+        Args:
+            baseline_results: 原始狀態掃描結果字典
+                             格式: {f"{file_path}::{function_name}": BaselineScanSummary}
+            
+        Returns:
+            bool: 是否成功更新
+        """
+        try:
+            self.logger.info("📊 更新原始狀態統計資料 (round0)...")
+            
+            # 讀取現有 CSV
+            current_data = self._read_current_csv()
+            if current_data is None:
+                self.logger.error("❌ 無法讀取現有 CSV")
+                return False
+            
+            # 更新 round0 欄位
+            updated = False
+            for key, summary in baseline_results.items():
+                # key 格式: "file_path::function_name"
+                if key in current_data:
+                    # 計算總漏洞數（Bandit + Semgrep）
+                    total_vulns = summary.bandit_vuln_count + summary.semgrep_vuln_count
+                    
+                    # 決定顯示格式
+                    if total_vulns > 0:
+                        if summary.bandit_vuln_count > 0 and summary.semgrep_vuln_count > 0:
+                            display_value = f"{total_vulns} (B:{summary.bandit_vuln_count}+S:{summary.semgrep_vuln_count})"
+                        elif summary.bandit_vuln_count > 0:
+                            display_value = f"{summary.bandit_vuln_count} (Bandit)"
+                        else:
+                            display_value = f"{summary.semgrep_vuln_count} (Semgrep)"
+                    else:
+                        display_value = "0"
+                    
+                    current_data[key]['round0'] = display_value
+                    updated = True
+                    self.logger.debug(f"  更新 {key}: round0 = {display_value}")
+            
+            if updated:
+                # 寫回 CSV
+                success = self._write_updated_csv(current_data)
+                if success:
+                    self.logger.info("✅ 原始狀態統計資料 (round0) 已更新")
+                return success
+            else:
+                self.logger.warning("⚠️  沒有匹配的函式可更新")
+                return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 更新原始狀態統計時發生錯誤: {e}")
             return False
     
     def update_round_result(self, round_num: int) -> bool:
@@ -284,10 +341,12 @@ class QueryStatistics:
                 with open(bandit_csv, 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
                     for record in reader:
-                        # 新格式：檔案路徑和修改前/修改後函式名稱是分開的
+                        # 讀取檔案路徑
                         filepath = record.get('檔案路徑', '').strip()
-                        # 注意：欄位名稱是「修改後函式名稱」（Phase 2 掃描時的實際名稱）
+                        # 兼容處理：AS Mode 使用「修改後函式名稱」，但也支援「函式名稱」作為 fallback
                         function_name = record.get('修改後函式名稱', '').strip()
+                        if not function_name:
+                            function_name = record.get('函式名稱', '').strip()
                         
                         if not filepath or not function_name:
                             continue
@@ -320,10 +379,12 @@ class QueryStatistics:
                 with open(semgrep_csv, 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
                     for record in reader:
-                        # 新格式：檔案路徑和修改前/修改後函式名稱是分開的
+                        # 讀取檔案路徑
                         filepath = record.get('檔案路徑', '').strip()
-                        # 注意：欄位名稱是「修改後函式名稱」（Phase 2 掃描時的實際名稱）
+                        # 兼容處理：AS Mode 使用「修改後函式名稱」，但也支援「函式名稱」作為 fallback
                         function_name = record.get('修改後函式名稱', '').strip()
+                        if not function_name:
+                            function_name = record.get('函式名稱', '').strip()
                         
                         if not filepath or not function_name:
                             continue
@@ -400,7 +461,7 @@ class QueryStatistics:
         讀取現有的 CSV 檔案
         
         Returns:
-            Dict[function_key, {round1: value, round2: value, ..., QueryTimes: value}]
+            Dict[function_key, {round0: value, round1: value, round2: value, ..., QueryTimes: value}]
             其中 function_key 格式為 "filepath::function_name"
             
         Note:
@@ -427,8 +488,13 @@ class QueryStatistics:
                     # 組合成唯一的 key
                     function_key = f"{filepath}::{function_name}"
                     
-                    # 讀取所有輪次的值
+                    # 讀取所有輪次的值（包含 round0）
                     function_data = {}
+                    
+                    # 讀取 round0（原始狀態）
+                    round0_value = row.get('round0', '').strip()
+                    function_data['round0'] = round0_value
+                    
                     for round_num in range(1, self.total_rounds + 1):
                         value = row.get(f'round{round_num}', '').strip()
                         function_data[f'round{round_num}'] = value
@@ -560,8 +626,8 @@ class QueryStatistics:
     def _write_updated_csv(self, data: Dict) -> bool:
         """寫入更新後的 CSV"""
         try:
-            # 準備表頭
-            headers = ['檔案路徑', '函式名稱'] + \
+            # 準備表頭（包含 round0）
+            headers = ['檔案路徑', '函式名稱', 'round0'] + \
                      [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
                      ['QueryTimes']
             
@@ -584,6 +650,9 @@ class QueryStatistics:
                         filepath, function_name = self._split_function_key(function_key)
                     
                     row = [filepath, function_name]
+                    
+                    # 添加 round0（原始狀態）
+                    row.append(function_data.get('round0', ''))
                     
                     # 添加每一輪的資料
                     for round_num in range(1, self.total_rounds + 1):
@@ -916,7 +985,7 @@ class NonASModeStatistics:
         else:
             return (function_key, '')
     
-    def initialize_csv(self, force: bool = False) -> bool:
+    def initialize_csv(self, skip_if_exists: bool = False) -> bool:
         """
         初始化 CSV 檔案（只在開始時執行一次）
         
@@ -924,7 +993,7 @@ class NonASModeStatistics:
         注意：使用「漏洞出現次數」而非「QueryTimes」
         
         Args:
-            force: 是否強制覆蓋已存在的檔案（預設 False）
+            skip_if_exists: 如果為 True 且 CSV 已存在，則跳過初始化（用於 resume 模式）
         
         Returns:
             bool: 是否成功初始化
@@ -933,13 +1002,13 @@ class NonASModeStatistics:
             # 確保資料夾存在
             self.csv_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # 檢查檔案是否已存在
-            if self.csv_path.exists() and not force:
-                self.logger.info(f"📄 非 AS Mode CSV 檔案已存在，跳過初始化: {self.csv_path}")
+            # 如果啟用 skip_if_exists 且檔案已存在，跳過初始化
+            if skip_if_exists and self.csv_path.exists():
+                self.logger.info(f"✅ CSV 已存在，跳過初始化（Resume 模式）: {self.csv_path}")
                 return True
             
-            # 準備表頭：使用「漏洞出現次數」取代「QueryTimes」
-            headers = ['檔案路徑', '函式名稱'] + \
+            # 準備表頭：包含 round0（原始狀態）+ 各輪數 + 漏洞出現次數
+            headers = ['檔案路徑', '函式名稱', 'round0'] + \
                      [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
                      ['漏洞出現次數']
             
@@ -950,9 +1019,10 @@ class NonASModeStatistics:
                 writer.writerow(headers)
                 
                 # 寫入每個函式的初始行（所有欄位為空）
+                # round0 + round1-N + 漏洞出現次數 = total_rounds + 2
                 for function_key in self.function_list:
                     filepath, function_name = self._split_function_key(function_key)
-                    row = [filepath, function_name] + [''] * (self.total_rounds + 1)
+                    row = [filepath, function_name] + [''] * (self.total_rounds + 2)
                     writer.writerow(row)
             
             self.logger.info(f"✅ 初始化非 AS Mode CSV: {self.csv_path} ({len(self.function_list)} 個函式)")
@@ -960,6 +1030,63 @@ class NonASModeStatistics:
             
         except Exception as e:
             self.logger.error(f"❌ 初始化 CSV 時發生錯誤: {e}")
+            return False
+    
+    def update_baseline_result(self, baseline_results: dict) -> bool:
+        """
+        更新原始狀態掃描結果（round0）
+        
+        Args:
+            baseline_results: 原始狀態掃描結果字典
+                             格式: {f"{file_path}::{function_name}": BaselineScanSummary}
+            
+        Returns:
+            bool: 是否成功更新
+        """
+        try:
+            self.logger.info("📊 更新非 AS Mode 原始狀態統計資料 (round0)...")
+            
+            # 讀取現有 CSV
+            current_data = self._read_current_csv()
+            if current_data is None:
+                self.logger.error("❌ 無法讀取現有 CSV")
+                return False
+            
+            # 更新 round0 欄位
+            updated = False
+            for key, summary in baseline_results.items():
+                # key 格式: "file_path::function_name"
+                if key in current_data:
+                    # 計算總漏洞數（Bandit + Semgrep）
+                    total_vulns = summary.bandit_vuln_count + summary.semgrep_vuln_count
+                    
+                    # 決定顯示格式
+                    if total_vulns > 0:
+                        if summary.bandit_vuln_count > 0 and summary.semgrep_vuln_count > 0:
+                            display_value = f"{total_vulns} (B:{summary.bandit_vuln_count}+S:{summary.semgrep_vuln_count})"
+                        elif summary.bandit_vuln_count > 0:
+                            display_value = f"{summary.bandit_vuln_count} (Bandit)"
+                        else:
+                            display_value = f"{summary.semgrep_vuln_count} (Semgrep)"
+                    else:
+                        display_value = "0"
+                    
+                    current_data[key]['round0'] = display_value
+                    updated = True
+                    self.logger.debug(f"  更新 {key}: round0 = {display_value}")
+            
+            if updated:
+                # 寫回 CSV
+                success = self._write_updated_csv(current_data)
+                if success:
+                    self.logger.info("✅ 非 AS Mode 原始狀態統計資料 (round0) 已更新")
+                return success
+            else:
+                self.logger.warning("⚠️  沒有匹配的函式可更新")
+                return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 更新原始狀態統計時發生錯誤: {e}")
             return False
     
     def update_round_result(self, round_num: int) -> bool:
@@ -1129,7 +1256,7 @@ class NonASModeStatistics:
         讀取現有的 CSV 檔案
         
         Returns:
-            Dict[function_key, {round1: value, ..., 漏洞出現次數: value}]
+            Dict[function_key, {round0: value, round1: value, ..., 漏洞出現次數: value}]
         """
         if not self.csv_path.exists():
             return {}
@@ -1151,6 +1278,11 @@ class NonASModeStatistics:
                     function_key = f"{filepath}::{function_name}"
                     
                     function_data = {}
+                    
+                    # 讀取 round0（原始狀態）
+                    round0_value = row.get('round0', '').strip()
+                    function_data['round0'] = round0_value
+                    
                     for round_num in range(1, self.total_rounds + 1):
                         value = row.get(f'round{round_num}', '').strip()
                         function_data[f'round{round_num}'] = value
@@ -1239,8 +1371,8 @@ class NonASModeStatistics:
         寫入更新後的 CSV
         """
         try:
-            # 準備表頭
-            headers = ['檔案路徑', '函式名稱'] + \
+            # 準備表頭（包含 round0）
+            headers = ['檔案路徑', '函式名稱', 'round0'] + \
                      [f'round{i}' for i in range(1, self.total_rounds + 1)] + \
                      ['漏洞出現次數']
             
@@ -1255,6 +1387,9 @@ class NonASModeStatistics:
                     
                     filepath, function_name = parts
                     row = [filepath, function_name]
+                    
+                    # 添加 round0（原始狀態）
+                    row.append(function_data.get('round0', ''))
                     
                     for round_num in range(1, self.total_rounds + 1):
                         value = function_data.get(f'round{round_num}', '')
@@ -1272,7 +1407,8 @@ class NonASModeStatistics:
 
 def initialize_non_as_mode_statistics(project_name: str, cwe_type: str,
                                        total_rounds: int, function_list: List[str],
-                                       base_result_path: Path = None) -> NonASModeStatistics:
+                                       base_result_path: Path = None,
+                                       skip_if_exists: bool = False) -> NonASModeStatistics:
     """
     便捷函式：初始化非 AS Mode 的 query_statistics.csv
     
@@ -1282,19 +1418,21 @@ def initialize_non_as_mode_statistics(project_name: str, cwe_type: str,
         total_rounds: 總輪數
         function_list: 函式列表（格式：["file.py_func()"]）
         base_result_path: CWE_Result 基礎路徑（可選）
+        skip_if_exists: 如果為 True 且 CSV 已存在，則跳過初始化（用於 resume 模式）
         
     Returns:
         NonASModeStatistics: 統計器實例
     """
     generator = NonASModeStatistics(project_name, cwe_type, total_rounds,
                                     function_list, base_result_path)
-    generator.initialize_csv()
+    generator.initialize_csv(skip_if_exists=skip_if_exists)
     return generator
 
 
 def initialize_query_statistics(project_name: str, cwe_type: str,
                                  total_rounds: int, function_list: List[str],
-                                 base_result_path: Path = None) -> QueryStatistics:
+                                 base_result_path: Path = None,
+                                 skip_if_exists: bool = False) -> QueryStatistics:
     """
     便捷函式：初始化 query_statistics.csv（即時更新模式）
     
@@ -1304,11 +1442,12 @@ def initialize_query_statistics(project_name: str, cwe_type: str,
         total_rounds: 總輪數
         function_list: 函式列表（格式：["file.py_func()"]）
         base_result_path: CWE_Result 基礎路徑（可選）
+        skip_if_exists: 如果為 True 且 CSV 已存在，則跳過初始化（用於 resume 模式）
         
     Returns:
         QueryStatistics: 統計器實例（可用於後續更新）
     """
     generator = QueryStatistics(project_name, cwe_type, total_rounds,
                                 function_list, base_result_path)
-    generator.initialize_csv()
+    generator.initialize_csv(skip_if_exists=skip_if_exists)
     return generator
