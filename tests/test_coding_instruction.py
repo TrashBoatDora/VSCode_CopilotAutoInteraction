@@ -13,36 +13,30 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.copilot_handler import CopilotHandler
 from src.logger import get_logger
 
-def test_parse_function():
-    """測試函式解析功能"""
+def test_parse_prompt_line():
+    """測試 prompt 行解析功能（純路徑格式）"""
     print("=" * 60)
-    print("測試 1: 函式解析功能")
+    print("測試 1: Prompt 行解析功能（純路徑格式）")
     print("=" * 60)
     
     handler = CopilotHandler()
     
     test_cases = [
-        ("src/crypto/encryption.py|encrypt_data()、decrypt_data()、hash_password()", 
-         ("src/crypto/encryption.py", "encrypt_data()")),
-        
-        ("src/auth/login.py|authenticate_user()", 
-         ("src/auth/login.py", "authenticate_user()")),
-        
-        ("utils/helper.py|format_string、validate_input", 
-         ("utils/helper.py", "format_string()")),
-        
-        ("invalid_format_without_pipe", 
-         ("", "")),
+        ("src/crypto/encryption.py", "src/crypto/encryption.py"),
+        ("src/auth/login.py", "src/auth/login.py"),
+        ("utils/helper.py", "utils/helper.py"),
+        ("  path/with/spaces.py  ", "path/with/spaces.py"),  # 測試 strip
+        ("", ""),  # 空字串
     ]
     
     for i, (input_str, expected) in enumerate(test_cases, 1):
         print(f"\n測試案例 {i}:")
-        print(f"  輸入: {input_str}")
+        print(f"  輸入: {input_str!r}")
         
-        result = handler._parse_and_extract_first_function(input_str)
+        result = handler._parse_prompt_line(input_str)
         
-        print(f"  預期: {expected}")
-        print(f"  結果: {result}")
+        print(f"  預期: {expected!r}")
+        print(f"  結果: {result!r}")
         print(f"  狀態: {'✅ 通過' if result == expected else '❌ 失敗'}")
 
 def test_apply_template():
@@ -54,17 +48,16 @@ def test_apply_template():
     handler = CopilotHandler()
     
     test_cases = [
-        ("src/crypto/encryption.py", "encrypt_data()"),
-        ("src/auth/login.py", "authenticate_user()"),
-        ("utils/helper.py", "format_string()"),
+        "src/crypto/encryption.py",
+        "src/auth/login.py",
+        "utils/helper.py",
     ]
     
-    for i, (filepath, function_name) in enumerate(test_cases, 1):
+    for i, filepath in enumerate(test_cases, 1):
         print(f"\n測試案例 {i}:")
         print(f"  檔案路徑: {filepath}")
-        print(f"  函式名稱: {function_name}")
         
-        result = handler._apply_coding_instruction_template(filepath, function_name)
+        result = handler._apply_coding_instruction_template(filepath)
         
         if result:
             print(f"  套用結果:")
@@ -83,19 +76,18 @@ def test_end_to_end():
     
     handler = CopilotHandler()
     
-    prompt_line = "src/crypto/encryption.py|encrypt_data()、decrypt_data()、hash_password()"
+    prompt_line = "src/crypto/encryption.py"
     
     print(f"\n原始 Prompt 行: {prompt_line}")
     
     # 步驟 1: 解析
-    filepath, function_name = handler._parse_and_extract_first_function(prompt_line)
+    filepath = handler._parse_prompt_line(prompt_line)
     print(f"\n步驟 1 - 解析結果:")
     print(f"  檔案路徑: {filepath}")
-    print(f"  函式名稱: {function_name} (只取第一個)")
     
     # 步驟 2: 套用模板
-    if filepath and function_name:
-        processed_prompt = handler._apply_coding_instruction_template(filepath, function_name)
+    if filepath:
+        processed_prompt = handler._apply_coding_instruction_template(filepath)
         
         print(f"\n步驟 2 - 套用模板後:")
         print(f"  ---")
@@ -112,7 +104,7 @@ def main():
     logger.info("開始測試 Coding Instruction 功能")
     
     try:
-        test_parse_function()
+        test_parse_prompt_line()
         test_apply_template()
         test_end_to_end()
         
@@ -122,11 +114,7 @@ def main():
         
     except Exception as e:
         logger.error(f"測試過程中發生錯誤: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-    
-    return 0
+        raise
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

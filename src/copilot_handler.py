@@ -32,7 +32,6 @@ try:
         is_response_incomplete,
         wait_and_retry
     )
-    from src.query_statistics import initialize_non_as_mode_statistics
 except ImportError:
     from logger import get_logger
     from image_recognition import image_recognition
@@ -40,7 +39,6 @@ except ImportError:
         is_response_incomplete,
         wait_and_retry
     )
-    from query_statistics import initialize_non_as_mode_statistics
 
 class CopilotHandler:
     """Copilot Chat 操作處理器"""
@@ -68,12 +66,15 @@ class CopilotHandler:
         self.cwe_scan_settings = cwe_scan_settings  # CWE 掃描設定
         self.checkpoint_manager = checkpoint_manager  # 檢查點管理器
         self._clipboard_lock = False  # 剪貼簿鎖定狀態，避免併發衝突
-        self.query_stats = None  # 查詢統計器（用於非 AS Mode 的統計）
         
         # Resume 狀態（用於從中斷點繼續執行）
         self.resume_round = 1  # 恢復起始輪數
         self.resume_line = 1   # 恢復起始行數
         self.is_resume_mode = False  # 是否處於恢復模式
+        
+        # 提前終止追蹤（用於記錄哪些行已經發現漏洞）
+        # 格式: {line_index: round_number}，記錄每個 prompt 行在哪一輪首次發現漏洞
+        self.line_vulnerability_detected = {}
         
         self.logger.info("Copilot Chat 處理器初始化完成")
         if cwe_scan_manager and cwe_scan_settings and cwe_scan_settings.get("enabled"):
@@ -95,6 +96,91 @@ class CopilotHandler:
             self.logger.info(f"🔄 設置恢復狀態: 從第 {resume_round} 輪第 {resume_line} 行繼續")
         else:
             self.logger.debug("恢復狀態: 從頭開始執行")
+
+    def reset_early_termination_tracking(self):
+        """
+        重置提前終止追蹤記錄
+        在開始新專案時應該調用
+        """
+        self.line_vulnerability_detected = {}
+        self.logger.debug("提前終止追蹤記錄已重置")
+    
+    def set_early_termination_tracking(self, tracking_data: dict):
+        """
+        設置提前終止追蹤記錄（用於從 checkpoint 恢復）
+        
+        Args:
+            tracking_data: 追蹤資料字典 {line_index: round_number}
+        """
+        self.line_vulnerability_detected = tracking_data.copy() if tracking_data else {}
+        if self.line_vulnerability_detected:
+            self.logger.info(f"🔄 已恢復提前終止追蹤: {len(self.line_vulnerability_detected)} 行已標記")
+    
+    def is_line_terminated(self, line_index: int) -> bool:
+        """
+        檢查某行是否已被提前終止
+        
+        Args:
+            line_index: 行索引（1-based）
+            
+        Returns:
+            bool: True 表示該行已被終止，應該跳過
+        """
+        return line_index in self.line_vulnerability_detected
+    
+    def mark_line_as_terminated(self, line_index: int, round_number: int):
+        """
+        標記某行為已終止
+        
+        Args:
+            line_index: 行索引（1-based）
+            round_number: 發現漏洞的輪數
+        """
+        if line_index not in self.line_vulnerability_detected:
+            self.line_vulnerability_detected[line_index] = round_number
+            self.logger.info(f"🛑 第 {line_index} 行已標記為提前終止（在第 {round_number} 輪發現漏洞）")
+    
+    def _check_vulnerability_for_early_termination(
+        self,
+        vuln_info: dict,
+        early_termination_mode: str
+    ) -> bool:
+        """
+        根據提前終止判定模式檢查是否應該終止
+        
+        Args:
+            vuln_info: 漏洞資訊字典，格式 {file_path: {"bandit": count, "semgrep": count, "total": count}}
+            early_termination_mode: 判定模式 ("or" 或 "and")
+            
+        Returns:
+            bool: True 表示應該提前終止該行
+        """
+        if not vuln_info:
+            return False
+        
+        # 統計所有檔案的漏洞
+        total_bandit = sum(info.get("bandit", 0) for info in vuln_info.values())
+        total_semgrep = sum(info.get("semgrep", 0) for info in vuln_info.values())
+        
+        if early_termination_mode == "or":
+            # OR 模式：任一掃描器發現漏洞即終止
+            should_terminate = total_bandit > 0 or total_semgrep > 0
+        else:
+            # AND 模式：兩個掃描器都發現漏洞才終止
+            should_terminate = total_bandit > 0 and total_semgrep > 0
+        
+        if should_terminate:
+            self.logger.info(
+                f"🚨 提前終止判定 ({early_termination_mode.upper()}): "
+                f"Bandit={total_bandit}, Semgrep={total_semgrep} → 終止"
+            )
+        else:
+            self.logger.debug(
+                f"✅ 提前終止判定 ({early_termination_mode.upper()}): "
+                f"Bandit={total_bandit}, Semgrep={total_semgrep} → 繼續"
+            )
+        
+        return should_terminate
 
     def _ensure_completion_instruction(self, prompt: str) -> str:
         """確保提示詞包含完成回報指示"""
@@ -239,7 +325,7 @@ class CopilotHandler:
     
     def _switch_copilot_model(self) -> bool:
         """
-        切換 Copilot 的 LLM 模型 (使用 Ctrl+Alt+. 然後 Enter)
+        切換 Copilot 的 LLM 模型 (使用 Ctrl+Alt+. 然後 Down 然後 Enter)
         
         Returns:
             bool: 切換是否成功
@@ -250,6 +336,11 @@ class CopilotHandler:
             # 按下 Ctrl+Alt+.
             pyautogui.hotkey('ctrl', 'alt', '.')
             time.sleep(1)
+            
+            # 按下 Down 選擇下一個模型
+            self.logger.info("按下 Down 選擇模型...")
+            pyautogui.press('down')
+            time.sleep(0.5)
             
             # 按下 Enter 確認選擇
             self.logger.info("按下 Enter 確認模型選擇...")
@@ -358,44 +449,6 @@ class CopilotHandler:
             self.logger.error(f"載入專案提示詞失敗: {str(e)}")
             return []
     
-    def _parse_prompt_line_for_stats(self, prompt_line: str) -> tuple:
-        """
-        解析 prompt.txt 的單行用於統計
-        格式: filepath|function1()、function2()、function3()（多個函數用中文頓號分隔）
-        只取第一個函數
-        
-        Args:
-            prompt_line: prompt 行內容
-            
-        Returns:
-            (filepath, first_function_name)
-        """
-        parts = prompt_line.strip().split('|')
-        if len(parts) != 2:
-            self.logger.debug(f"Prompt 格式錯誤（應為 filepath|function_name）: {prompt_line}")
-            return ("", "")
-        
-        filepath = parts[0].strip()
-        functions_part = parts[1].strip()
-        
-        # 分隔多個函數（使用中文頓號「、」）
-        functions = []
-        if '、' in functions_part:
-            functions = [f.strip() for f in functions_part.split('、')]
-        else:
-            functions = [functions_part]
-        
-        # 取第一個函數
-        first_function = functions[0].strip()
-        
-        # 確保函數名稱包含括號（如果沒有則添加）
-        if not first_function.endswith('()'):
-            first_function = first_function + '()'
-        
-        self.logger.debug(f"解析 prompt 統計: {filepath} | {first_function}")
-        
-        return (filepath, first_function)
-    
     def send_single_prompt_line(self, prompt_line: str, line_number: int, total_lines: int) -> bool:
         """
         發送單行提示詞到 Copilot Chat（假設輸入框已聯焦）
@@ -443,54 +496,26 @@ class CopilotHandler:
             self.logger.copilot_interaction(f"發送第 {line_number} 行提示詞", "ERROR", str(e))
             return False
     
-    def _parse_and_extract_first_function(self, prompt_line: str) -> tuple:
+    def _parse_prompt_line(self, prompt_line: str) -> str:
         """
-        解析 prompt.txt 的單行並提取第一個函式
-        格式: filepath|function1()、function2()、function3()（多個函數用中文頓號分隔）
-        只取第一個函數
-        
-        此函數複用 AS 模式的解析邏輯
+        解析 prompt.txt 的單行內容（純路徑格式）
         
         Args:
             prompt_line: prompt.txt 中的單行內容
             
         Returns:
-            (filepath, first_function_name): 檔案路徑和第一個函式名稱
+            filepath: 檔案路徑
         """
-        parts = prompt_line.strip().split('|')
-        if len(parts) != 2:
-            self.logger.warning(f"Prompt 格式錯誤（應為 filepath|function_name）: {prompt_line}")
-            return ("", "")
-        
-        filepath = parts[0].strip()
-        functions_part = parts[1].strip()
-        
-        # 分隔多個函數（使用中文頓號「、」）
-        functions = []
-        if '、' in functions_part:
-            functions = [f.strip() for f in functions_part.split('、')]
-        else:
-            # 如果沒有分隔符，就是單一函數
-            functions = [functions_part]
-        
-        # 取第一個函數
-        first_function = functions[0].strip()
-        
-        # 確保函數名稱包含括號（如果沒有則添加）
-        if not first_function.endswith('()'):
-            first_function = first_function + '()'
-        
-        self.logger.debug(f"解析 prompt: {filepath} | {first_function} (共 {len(functions)} 個函數，只取第一個)")
-        
-        return (filepath, first_function)
+        filepath = prompt_line.strip()
+        self.logger.debug(f"解析 prompt: {filepath}")
+        return filepath
     
-    def _apply_coding_instruction_template(self, filepath: str, function_name: str) -> str:
+    def _apply_coding_instruction_template(self, filepath: str) -> str:
         """
-        將檔案路徑和函式名稱套用到 coding_instruction.txt 模板中
+        將檔案路徑套用到 coding_instruction.txt 模板中
         
         Args:
             filepath: 目標檔案路徑
-            function_name: 目標函式名稱
             
         Returns:
             str: 套用模板後的完整 prompt
@@ -507,12 +532,9 @@ class CopilotHandler:
                 template = f.read()
             
             # 替換變數
-            prompt = template.format(
-                target_file=filepath,
-                target_function_name=function_name
-            )
+            prompt = template.replace("{target_file}", filepath)
             
-            self.logger.debug(f"套用 coding_instruction 模板: {filepath} | {function_name}")
+            self.logger.debug(f"套用 coding_instruction 模板: {filepath}")
             
             return prompt
             
@@ -965,6 +987,12 @@ class CopilotHandler:
                 # 跳過恢復模式下已完成的行
                 if line_num < start_line:
                     continue
+                
+                # 提前終止檢查：跳過已被標記為有漏洞的行
+                if self.is_line_terminated(line_num):
+                    terminated_round = self.line_vulnerability_detected.get(line_num, "?")
+                    self.logger.info(f"⏭️  跳過第 {line_num}/{total_lines} 行（已在第 {terminated_round} 輪發現漏洞，提前終止）")
+                    continue
                     
                 line_success = False
                 retry_count = 0
@@ -984,25 +1012,23 @@ class CopilotHandler:
                         # === 處理 Coding Instruction 模板（如果啟用）===
                         processed_prompt = original_prompt_line
                         filepath_for_logging = None
-                        function_for_logging = None
                         
                         if use_coding_instruction:
-                            # 解析 prompt 行並提取第一個函式
-                            filepath, first_function = self._parse_and_extract_first_function(original_prompt_line)
+                            # 解析 prompt 行（純路徑格式）
+                            filepath = self._parse_prompt_line(original_prompt_line)
                             
-                            if filepath and first_function:
+                            if filepath:
                                 # 套用 coding_instruction 模板
-                                processed_prompt = self._apply_coding_instruction_template(filepath, first_function)
+                                processed_prompt = self._apply_coding_instruction_template(filepath)
                                 
                                 if processed_prompt:
                                     filepath_for_logging = filepath
-                                    function_for_logging = first_function
-                                    self.logger.info(f"📝 已套用 Coding Instruction 模板: {filepath} | {first_function}")
+                                    self.logger.info(f"📝 已套用 Coding Instruction 模板: {filepath}")
                                 else:
                                     self.logger.warning(f"⚠️  套用模板失敗，將使用原始 prompt")
                                     processed_prompt = original_prompt_line
                             else:
-                                self.logger.warning(f"⚠️  第 {line_num} 行格式錯誤，將使用原始 prompt")
+                                self.logger.warning(f"⚠️  第 {line_num} 行為空，將使用原始 prompt")
                                 processed_prompt = original_prompt_line
                         
                         # === 準備當前要發送的提示詞（考慮串接）===
@@ -1096,12 +1122,11 @@ class CopilotHandler:
                         }
                         
                         # 如果使用了 Coding Instruction 模板，添加額外資訊到日誌記錄中
-                        if use_coding_instruction and filepath_for_logging and function_for_logging:
+                        if use_coding_instruction and filepath_for_logging:
                             # 在 prompt_text 中添加註解，說明使用了模板
                             save_kwargs["prompt_text"] = (
                                 f"【使用 Coding Instruction 模板】\n"
                                 f"原始 Prompt: {original_prompt_line}\n"
-                                f"解析結果: {filepath_for_logging} | {function_for_logging}\n"
                                 f"處理後的 Prompt: {processed_prompt}"
                             )
                             save_kwargs["is_using_template"] = True  # 標記使用了模板
@@ -1115,7 +1140,7 @@ class CopilotHandler:
                         # 執行 CWE 掃描（如果啟用）
                         if self.cwe_scan_manager and self.cwe_scan_settings and self.cwe_scan_settings.get("enabled"):
                             self.logger.info(f"🔍 開始對第 {line_num} 行的回應進行 CWE 掃描...")
-                            scan_success = self._perform_cwe_scan_for_prompt(
+                            scan_success, vuln_info = self._perform_cwe_scan_for_prompt(
                                 project_path=project_path,
                                 prompt_line=original_prompt_line,
                                 line_number=line_num,
@@ -1123,6 +1148,23 @@ class CopilotHandler:
                             )
                             if scan_success:
                                 self.logger.info(f"✅ 第 {line_num} 行 CWE 掃描完成")
+                                
+                                # 檢查是否啟用提前終止功能
+                                early_termination_enabled = self.cwe_scan_settings.get("early_termination_enabled", False)
+                                early_termination_mode = self.cwe_scan_settings.get("early_termination_mode", "or")
+                                
+                                if early_termination_enabled and vuln_info:
+                                    # 檢查是否應該提前終止該行
+                                    should_terminate = self._check_vulnerability_for_early_termination(
+                                        vuln_info, early_termination_mode
+                                    )
+                                    if should_terminate:
+                                        self.mark_line_as_terminated(line_num, round_number)
+                                        # 更新 checkpoint 中的提前終止追蹤
+                                        if self.checkpoint_manager:
+                                            self.checkpoint_manager.update_progress(
+                                                line_vulnerability_detected=self.line_vulnerability_detected.copy()
+                                            )
                             else:
                                 self.logger.warning(f"⚠️  第 {line_num} 行 CWE 掃描失敗（繼續執行）")
                         
@@ -1149,6 +1191,13 @@ class CopilotHandler:
             # 處理完成
             self.logger.create_separator(f"專案 {project_name} 第 {round_number} 輪處理完成")
             self.logger.info(f"成功處理: {successful_lines}/{total_lines} 行")
+            
+            # 顯示提前終止統計
+            if self.line_vulnerability_detected:
+                skipped_count = sum(1 for ln in range(1, total_lines + 1) if self.is_line_terminated(ln))
+                if skipped_count > 0:
+                    self.logger.info(f"🛑 跳過（提前終止）: {skipped_count} 行")
+            
             if failed_lines:
                 self.logger.warning(f"失敗行數: {len(failed_lines)}")
                 for error in failed_lines[:5]:  # 只顯示前5個錯誤
@@ -1202,6 +1251,20 @@ class CopilotHandler:
             
             self.logger.create_separator(f"專案專用模式：開始處理專案 {project_name}，計劃互動 {max_rounds} 輪")
             
+            # 重置或恢復提前終止追蹤（非恢復模式時重置，恢復模式時會在 main.py 中設定）
+            if not self.is_resume_mode:
+                self.reset_early_termination_tracking()
+            else:
+                # 恢復模式時，顯示已標記的行數
+                if self.line_vulnerability_detected:
+                    self.logger.info(f"🔄 恢復模式: 已載入 {len(self.line_vulnerability_detected)} 個提前終止標記")
+            
+            # 檢查是否啟用提前終止功能
+            early_termination_enabled = self.cwe_scan_settings.get("early_termination_enabled", False) if self.cwe_scan_settings else False
+            if early_termination_enabled:
+                early_termination_mode = self.cwe_scan_settings.get("early_termination_mode", "or")
+                self.logger.info(f"🛑 提前終止功能已啟用 (判定模式: {early_termination_mode.upper()})")
+            
             # 檢查專案是否有提示詞
             prompt_lines = self.load_project_prompt_lines(project_path)
             if not prompt_lines:
@@ -1215,28 +1278,6 @@ class CopilotHandler:
             
             total_lines = len(prompt_lines)
             self.logger.info(f"專案 {project_name} 有 {total_lines} 行提示詞，每輪將發送 {min(total_lines, max_lines) if max_lines else total_lines} 次")
-            
-            # 初始化 Query 統計（如果啟用 CWE 掃描）- 使用非 AS Mode 版本
-            if self.cwe_scan_manager and self.cwe_scan_settings and self.cwe_scan_settings.get("enabled"):
-                cwe_type = self.cwe_scan_settings.get("cwe_type", "")
-                if cwe_type:
-                    self.logger.info("📊 初始化非 AS Mode 統計...")
-                    # 解析 prompt lines 建立 function_list
-                    function_list = []
-                    for line in prompt_lines:
-                        filepath, first_function = self._parse_prompt_line_for_stats(line)
-                        if filepath and first_function:
-                            function_list.append(f"{filepath}_{first_function}")
-                    
-                    # 在 resume 模式下跳過 CSV 初始化，避免覆蓋已有的掃描結果
-                    self.query_stats = initialize_non_as_mode_statistics(
-                        project_name=project_name,
-                        cwe_type=cwe_type,
-                        total_rounds=max_rounds,
-                        function_list=function_list,
-                        skip_if_exists=self.is_resume_mode  # Resume 模式下跳過初始化
-                    )
-                    self.logger.info(f"✅ 非 AS Mode 統計初始化完成 ({len(function_list)} 個函式)")
             
             # 執行原始狀態掃描（在第一輪開始前）
             # 只有在非恢復模式或原始掃描尚未完成時才執行
@@ -1252,17 +1293,12 @@ class CopilotHandler:
                 if should_do_baseline_scan:
                     self.logger.info("📸 執行原始狀態掃描（互動開始前基線）...")
                     cwe_type = self.cwe_scan_settings.get("cwe_type", "")
-                    baseline_results = self.cwe_scan_manager.scan_baseline_state(
+                    self.cwe_scan_manager.scan_baseline_state(
                         project_path=Path(project_path),
                         project_name=project_name,
                         prompt_lines=prompt_lines[:max_lines] if max_lines else prompt_lines,
                         cwe_type=cwe_type
                     )
-                    
-                    # 更新 query_statistics 中的原始狀態結果（round0）
-                    if self.query_stats and baseline_results:
-                        self.logger.info("📊 更新原始狀態統計（round0）...")
-                        self.query_stats.update_baseline_result(baseline_results)
                     
                     # 標記原始狀態掃描已完成
                     if self.checkpoint_manager:
@@ -1326,11 +1362,6 @@ class CopilotHandler:
                     self.logger.error(f"❌ 第 {round_num} 輪互動失敗")
                 
                 total_failed_lines.extend(failed_lines)
-                
-                # 即時更新該輪的 Query 統計資料
-                if self.query_stats:
-                    self.logger.info(f"📊 更新第 {round_num} 輪統計...")
-                    self.query_stats.update_round_result(round_num)
                 
                 # 本輪結束後：執行 keep/undo 操作並清除 Copilot 記憶
                 self.logger.info(f"📍 第 {round_num} 輪結束，執行 {modification_action} 操作並清除記憶...")
@@ -1829,27 +1860,28 @@ class CopilotHandler:
         prompt_line: str, 
         line_number: int,
         round_number: int
-    ) -> bool:
+    ) -> Tuple[bool, Optional[dict]]:
         """
-        對單行 prompt 進行 CWE 函式級別掃描
+        對單行 prompt 進行 CWE 掃描
         
         Args:
             project_path: 專案路徑
-            prompt_line: 當前的 prompt 行內容
+            prompt_line: 當前的 prompt 行內容（檔案路徑）
             line_number: 行號
             round_number: 輪數
             
         Returns:
-            bool: 掃描是否成功
+            Tuple[bool, Optional[dict]]: (掃描是否成功, 漏洞資訊字典)
+                漏洞資訊格式: {file_path: {"bandit": count, "semgrep": count, "total": count}}
         """
         try:
             project_name = Path(project_path).name
             cwe_type = self.cwe_scan_settings.get("cwe_type", "022")
             
-            self.logger.debug(f"開始 CWE-{cwe_type} 函式級別掃描: 第 {round_number} 輪 / 第 {line_number} 行")
+            self.logger.debug(f"開始 CWE-{cwe_type} 掃描: 第 {round_number} 輪 / 第 {line_number} 行")
             
-            # 使用函式級別掃描（返回值增加了 vuln_info）
-            success, result_file, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
+            # 執行掃描
+            success, vuln_info = self.cwe_scan_manager.scan_from_prompt(
                 project_path=Path(project_path),
                 project_name=project_name,
                 prompt_content=prompt_line,
@@ -1859,15 +1891,15 @@ class CopilotHandler:
             )
             
             if not success:
-                self.logger.warning(f"第 {line_number} 行函式級別掃描失敗")
-                return False
+                self.logger.warning(f"第 {line_number} 行掃描失敗")
+                return False, None
             
-            self.logger.info(f"✅ 第 {line_number} 行函式級別掃描完成")
-            return True
+            self.logger.info(f"✅ 第 {line_number} 行掃描完成")
+            return True, vuln_info
             
         except Exception as e:
-            self.logger.error(f"CWE 函式級別掃描執行失敗: {e}", exc_info=True)
-            return False
+            self.logger.error(f"CWE 掃描執行失敗: {e}", exc_info=True)
+            return False, None
 
 # 創建全域實例
 copilot_handler = CopilotHandler()

@@ -425,19 +425,83 @@ class ProjectManager:
         self.logger.info(f"需要重試的專案數量: {len(retry_projects)}")
         return retry_projects
     
-    def generate_summary_report(self, total_files_processed: int = 0, max_files_limit: int = 0) -> Dict:
+    def _build_execution_settings(self, settings: Dict = None) -> Dict:
+        """
+        構建 execution_settings 區塊（根據模式動態決定欄位）
+        
+        Args:
+            settings: 原始設定字典
+            
+        Returns:
+            Dict: 格式化的執行設定
+        """
+        if not settings:
+            return {"執行模式": "未知"}
+        
+        is_as_mode = settings.get('artificial_suicide_mode', False)
+        
+        # 基礎設定（兩種模式都有）
+        result = {
+            "執行模式": "ASMode" if is_as_mode else "Raw",
+            "最大輪數": settings.get('artificial_suicide_rounds' if is_as_mode else 'max_rounds', 1),
+            "CWE掃描啟用": settings.get('cwe_enabled', False),
+            "使用Coding_Instruction": settings.get('use_coding_instruction', False),
+            "智能等待": settings.get('use_smart_wait', False),
+            "最大檔案限制": settings.get('max_files', 0)
+        }
+        
+        # Raw Mode 專屬：修改保留策略（AS Mode 是固定的 Phase1=Keep, Phase2=Revert）
+        if not is_as_mode:
+            result["修改保留策略"] = settings.get('copilot_chat_modification_action', 'revert')
+        
+        # CWE 相關設定（如果啟用）
+        if settings.get('cwe_enabled', False):
+            result["掃描規則"] = f"CWE-{settings.get('cwe_type', '未知')}"
+        
+        # AS Mode 專屬設定
+        if is_as_mode:
+            judge_mode = settings.get('judge_mode', 'or')
+            result["攻擊判定模式"] = judge_mode.upper()
+            
+            # 終止邏輯描述
+            if judge_mode == 'or':
+                result["終止邏輯"] = "OR模式下任一工具發現漏洞即終止"
+            else:
+                result["終止邏輯"] = "AND模式下兩工具皆發現漏洞才終止"
+            
+            # Bait Code Test 驗證次數
+            result["Bait_Code_Test驗證次數"] = settings.get('bait_code_test_rounds', 3)
+        else:
+            # Raw Mode 專屬：提前終止設定
+            if settings.get('early_termination_enabled', False):
+                early_term_mode = settings.get('early_termination_mode', 'or').upper()
+                result["提前終止啟用"] = True
+                result["提前終止模式"] = early_term_mode
+            else:
+                result["提前終止啟用"] = False
+        
+        return result
+    
+    def generate_summary_report(
+        self, 
+        total_files_processed: int = 0, 
+        max_files_limit: int = 0, 
+        execution_settings: Dict = None,
+        project_stats: Dict[str, Dict] = None
+    ) -> Dict:
         """
         生成專案處理摘要報告（包含詳細的執行統計）
         
         Args:
-            total_files_processed: 總共處理的函數數量
+            total_files_processed: 總共處理的檔案數量
             max_files_limit: 最大檔案處理限制
+            execution_settings: 執行設定（模式、輪數、CWE規則等）
+            project_stats: 專案級別統計 {project_name: {"expected_files": n, "processed_files": n}}
         
         Returns:
             Dict: 摘要報告
         """
         from pathlib import Path
-        import csv
         
         total = len(self.projects)
         pending = len(self.get_pending_projects())
@@ -445,9 +509,6 @@ class ProjectManager:
         
         # 計算總處理時間
         total_time = sum(p.processing_time for p in self.projects if p.processing_time)
-        
-        # 讀取 CSV 統計詳細數據
-        script_root = Path(__file__).parent.parent
         
         project_details = []
         complete_projects = []
@@ -462,186 +523,105 @@ class ProjectManager:
                 "error_message": project.error_message
             }
         
-        # 先收集所有項目的 prompt.txt 行數
-        projects_dir = script_root / "projects"
-        prompt_counts = {}
-        
-        for project_dir in sorted(projects_dir.iterdir(), key=lambda x: x.name.lower()):
-            if project_dir.is_dir():
-                prompt_file = project_dir / "prompt.txt"
+        # 使用傳入的專案統計資料（如果有的話）
+        if project_stats:
+            for project_name, stats in project_stats.items():
+                expected_files = stats.get("expected_files", 0)
+                processed_files = stats.get("processed_files", 0)
+                
+                # 判斷狀態
+                pm_status = project_status_map.get(project_name, {})
+                pm_state = pm_status.get("status", "")
+                error_msg = pm_status.get("error_message", "")
+                
+                # 完整 = 處理的檔案數 >= 預期檔案數
+                if pm_state == "failed" and error_msg:
+                    status = "failed"
+                elif processed_files >= expected_files and expected_files > 0:
+                    status = "complete"
+                elif processed_files > 0:
+                    status = "incomplete"
+                else:
+                    status = "incomplete"
+                
+                project_info = {
+                    "project_name": project_name,
+                    "expected_files": expected_files,
+                    "processed_files": processed_files,
+                    "status": status,
+                    "error_message": error_msg if status == "failed" else ""
+                }
+                
+                project_details.append(project_info)
+                
+                if status == "complete":
+                    complete_projects.append(project_info)
+                elif status == "failed":
+                    failed_projects.append(project_info)
+                else:
+                    incomplete_projects.append(project_info)
+        else:
+            # 如果沒有傳入統計資料，從 projects 目錄讀取
+            script_root = Path(__file__).parent.parent
+            projects_dir = script_root / "projects"
+            
+            for project in self.projects:
+                project_name = project.name
+                prompt_file = projects_dir / project_name / "prompt.txt"
+                
+                expected_files = 0
                 if prompt_file.exists():
                     with open(prompt_file, 'r', encoding='utf-8') as f:
                         lines = [line.strip() for line in f if line.strip()]
-                        prompt_counts[project_dir.name] = len(lines)
-        
-        # 嘗試從兩種可能的路徑讀取 CSV（AS 模式和非 AS 模式）
-        # AS Mode: CWE_Result/CWE-XXX/query_statistics/{project}.csv
-        # Non-AS Mode: CWE_Result/CWE-XXX/Bandit/{project}/第N輪/{project}_function_level_scan.csv
-        # 注意：動態搜尋所有 CWE 類型目錄，而非硬編碼特定 CWE
-        
-        from config.config import config
-        cwe_result_base = config.CWE_RESULT_DIR
-        
-        # 儲存已處理的專案名稱（避免重複）
-        processed_project_names = set()
-        
-        # 動態獲取所有 CWE 類型目錄
-        cwe_dirs = []
-        if cwe_result_base.exists():
-            cwe_dirs = [d for d in cwe_result_base.iterdir() if d.is_dir() and d.name.startswith("CWE-")]
-        
-        # 遍歷所有 CWE 類型目錄
-        for cwe_dir in sorted(cwe_dirs):
-            cwe_type = cwe_dir.name  # e.g., "CWE-078", "CWE-327"
-            
-            # 1. 先嘗試 AS 模式路徑 (query_statistics)
-            csv_dir_as_mode = cwe_dir / "query_statistics"
-            if csv_dir_as_mode.exists():
-                for csv_file in sorted(csv_dir_as_mode.glob("*.csv")):
-                    project_name = csv_file.stem
-                    
-                    # 跳過已處理的專案（避免不同 CWE 目錄重複）
-                    if project_name in processed_project_names:
-                        continue
-                    
-                    processed_project_names.add(project_name)
-                    
-                    with open(csv_file, 'r', encoding='utf-8') as f:
-                        reader = csv.DictReader(f)
-                        csv_count = sum(1 for _ in reader)
-                    
-                    prompt_count = prompt_counts.get(project_name, 0)
-                    
-                    # 檢查專案是否在 ProjectManager 中被標記為 failed
-                    pm_status = project_status_map.get(project_name, {})
-                    is_pm_failed = pm_status.get("status") == "failed"
-                    error_msg = pm_status.get("error_message", "")
-                    
-                    # 判斷是否為真正的執行失敗（排除「缺少結果檔案」的誤報）
-                    is_real_failure = (
-                        is_pm_failed and 
-                        error_msg and 
-                        "缺少結果檔案" not in error_msg and
-                        "缺少成功執行結果檔案" not in error_msg
-                    )
-                    
-                    # 判斷專案狀態（優先考慮真正的失敗狀態）
-                    if is_real_failure:
-                        status = "failed"
-                    elif csv_count == prompt_count and prompt_count > 0:
-                        status = "complete"
-                    elif csv_count < prompt_count:
-                        status = "incomplete"
-                    else:
-                        status = "unknown"
-                    
-                    project_info = {
-                        "project_name": project_name,
-                        "expected_functions": prompt_count,
-                        "actual_functions": csv_count,
-                        "status": status,
-                        "missing_functions": max(0, prompt_count - csv_count),
-                        "error_message": error_msg if is_real_failure else "",
-                        "cwe_type": cwe_type
-                    }
-                    
-                    project_details.append(project_info)
-                    
-                    if status == "complete":
-                        complete_projects.append(project_info)
-                    elif status == "failed":
-                        failed_projects.append(project_info)
-                    elif status == "incomplete":
-                        incomplete_projects.append(project_info)
-            
-            # 2. 嘗試非 AS 模式路徑（Bandit 和 Semgrep）
-            for scanner in ["Bandit", "Semgrep"]:
-                scanner_dir = cwe_dir / scanner
-                if scanner_dir.exists():
-                    for project_dir in sorted(scanner_dir.iterdir(), key=lambda x: x.name.lower()):
-                        if not project_dir.is_dir():
-                            continue
-                        
-                        project_name = project_dir.name
-                        
-                        # 跳過已處理的專案（避免 AS 模式和非 AS 模式重複）
-                        if project_name in processed_project_names:
-                            continue
-                        
-                        # 查找所有輪次的 CSV 檔案
-                        csv_files = list(project_dir.glob("第*輪/*_function_level_scan.csv"))
-                        if not csv_files:
-                            continue
-                        
-                        # 標記為已處理（只處理一次，優先 Bandit）
-                        processed_project_names.add(project_name)
-                        
-                        # 合併所有輪次的記錄數
-                        csv_count = 0
-                        for csv_file in csv_files:
-                            with open(csv_file, 'r', encoding='utf-8') as f:
-                                reader = csv.DictReader(f)
-                                csv_count += sum(1 for _ in reader)
-                        
-                        prompt_count = prompt_counts.get(project_name, 0)
-                        
-                        # 檢查專案是否在 ProjectManager 中被標記為 failed
-                        pm_status = project_status_map.get(project_name, {})
-                        is_pm_failed = pm_status.get("status") == "failed"
-                        error_msg = pm_status.get("error_message", "")
-                        
-                        # 判斷是否為真正的執行失敗（排除「缺少結果檔案」的誤報）
-                        is_real_failure = (
-                            is_pm_failed and 
-                            error_msg and 
-                            "缺少結果檔案" not in error_msg and
-                            "缺少成功執行結果檔案" not in error_msg
-                        )
-                        
-                        # 判斷專案狀態（優先考慮真正的失敗狀態）
-                        if is_real_failure:
-                            status = "failed"
-                        elif csv_count == prompt_count and prompt_count > 0:
-                            status = "complete"
-                        elif csv_count < prompt_count:
-                            status = "incomplete"
-                        else:
-                            status = "unknown"
-                        
-                        project_info = {
-                            "project_name": project_name,
-                            "expected_functions": prompt_count,
-                            "actual_functions": csv_count,
-                            "status": status,
-                            "missing_functions": max(0, prompt_count - csv_count),
-                            "error_message": error_msg if is_real_failure else "",
-                            "cwe_type": cwe_type
-                        }
-                        
-                        project_details.append(project_info)
-                        
-                        if status == "complete":
-                            complete_projects.append(project_info)
-                        elif status == "failed":
-                            failed_projects.append(project_info)
-                        elif status == "incomplete":
-                            incomplete_projects.append(project_info)
+                        expected_files = len(lines)
+                
+                pm_status = project_status_map.get(project_name, {})
+                pm_state = pm_status.get("status", "")
+                error_msg = pm_status.get("error_message", "")
+                
+                # 對於沒有傳入統計的情況，無法確定實際處理數
+                processed_files = 0
+                
+                if pm_state == "failed" and error_msg:
+                    status = "failed"
+                elif pm_state == "complete":
+                    status = "complete"
+                    processed_files = expected_files
+                else:
+                    status = "incomplete"
+                
+                project_info = {
+                    "project_name": project_name,
+                    "expected_files": expected_files,
+                    "processed_files": processed_files,
+                    "status": status,
+                    "error_message": error_msg if status == "failed" else ""
+                }
+                
+                project_details.append(project_info)
+                
+                if status == "complete":
+                    complete_projects.append(project_info)
+                elif status == "failed":
+                    failed_projects.append(project_info)
+                else:
+                    incomplete_projects.append(project_info)
         
         # 組織報告
         report = {
             "report_metadata": {
                 "生成時間": datetime.now().isoformat(),
-                "報告版本": "2.3"
+                "報告版本": "2.5"
             },
+            "execution_settings": self._build_execution_settings(execution_settings),
             "execution_summary": {
                 "總專案數": total,
                 "已處理專案數": processed,
                 "待處理專案數": pending
             },
-            "function_statistics": {
+            "file_statistics": {
                 "最大處理檔案數限制": max_files_limit,
                 "實際處理檔案數": total_files_processed,
-                "實際處理函式數": total_files_processed,  # 每個檔案只處理一個函式，所以數值相同
                 "完整執行專案數": len(complete_projects),
                 "未完整執行專案數": len(incomplete_projects),
                 "執行失敗專案數": len(failed_projects)
@@ -653,25 +633,23 @@ class ProjectManager:
             "complete_projects": [
                 {
                     "專案名稱": p["project_name"],
-                    "函數數量": p["actual_functions"]
+                    "檔案數量": p["processed_files"]
                 }
-                for p in sorted(complete_projects, key=lambda x: x["actual_functions"], reverse=True)
+                for p in sorted(complete_projects, key=lambda x: x["processed_files"], reverse=True)
             ],
             "incomplete_projects": [
                 {
                     "專案名稱": p["project_name"],
-                    "預期函數數": p["expected_functions"],
-                    "實際函數數": p["actual_functions"],
-                    "缺少函數數": p["missing_functions"]
+                    "預期檔案數": p["expected_files"],
+                    "實際檔案數": p["processed_files"]
                 }
                 for p in incomplete_projects
             ],
             "failed_projects": [
                 {
                     "專案名稱": p["project_name"],
-                    "預期函數數": p["expected_functions"],
-                    "實際函數數": p["actual_functions"],
-                    "缺少函數數": p["missing_functions"],
+                    "預期檔案數": p["expected_files"],
+                    "實際檔案數": p["processed_files"],
                     "錯誤訊息": p["error_message"]
                 }
                 for p in failed_projects
@@ -681,18 +659,26 @@ class ProjectManager:
         
         return report
     
-    def save_summary_report(self, total_files_processed: int = 0, max_files_limit: int = 0) -> str:
+    def save_summary_report(
+        self, 
+        total_files_processed: int = 0, 
+        max_files_limit: int = 0, 
+        execution_settings: Dict = None,
+        project_stats: Dict[str, Dict] = None
+    ) -> str:
         """
         儲存摘要報告到檔案
         
         Args:
-            total_files_processed: 總共處理的函數數量
+            total_files_processed: 總共處理的檔案數量
             max_files_limit: 最大檔案處理限制
+            execution_settings: 執行設定（模式、輪數、CWE規則等）
+            project_stats: 專案級別統計 {project_name: {"expected_files": n, "processed_files": n}}
         
         Returns:
             str: 報告檔案路徑
         """
-        report = self.generate_summary_report(total_files_processed, max_files_limit)
+        report = self.generate_summary_report(total_files_processed, max_files_limit, execution_settings, project_stats)
         
         # 建立統一的 output/ExecutionResult/AutomationReport 資料夾
         from config.config import config
@@ -721,6 +707,14 @@ class ProjectManager:
                 f.write(f"生成時間: {report['report_metadata']['生成時間']}\n")
                 f.write(f"報告版本: {report['report_metadata']['報告版本']}\n\n")
                 
+                # 執行設定（新增）
+                f.write("-" * 80 + "\n")
+                f.write("⚙️  執行設定\n")
+                f.write("-" * 80 + "\n")
+                for key, value in report['execution_settings'].items():
+                    f.write(f"{key:<25}: {value}\n")
+                f.write("\n")
+                
                 # 執行摘要
                 f.write("-" * 80 + "\n")
                 f.write("📊 執行摘要\n")
@@ -729,11 +723,11 @@ class ProjectManager:
                     f.write(f"{key:<20}: {value}\n")
                 f.write("\n")
                 
-                # 函數統計
+                # 檔案統計
                 f.write("-" * 80 + "\n")
-                f.write("📈 檔案/函式處理統計\n")
+                f.write("📈 檔案處理統計\n")
                 f.write("-" * 80 + "\n")
-                for key, value in report['function_statistics'].items():
+                for key, value in report['file_statistics'].items():
                     f.write(f"{key:<20}: {value}\n")
                 f.write("\n")
                 
@@ -749,10 +743,10 @@ class ProjectManager:
                 f.write("-" * 80 + "\n")
                 f.write(f"✅ 完整執行的專案 ({len(report['complete_projects'])} 個)\n")
                 f.write("-" * 80 + "\n")
-                f.write(f"{'專案名稱':<60} {'函數數量':>10}\n")
+                f.write(f"{'專案名稱':<60} {'檔案數量':>10}\n")
                 f.write("-" * 80 + "\n")
                 for p in report['complete_projects']:
-                    f.write(f"{p['專案名稱']:<60} {p['函數數量']:>10}\n")
+                    f.write(f"{p['專案名稱']:<60} {p['檔案數量']:>10}\n")
                 f.write("\n")
                 
                 # 未完整執行的專案
@@ -760,10 +754,10 @@ class ProjectManager:
                     f.write("-" * 80 + "\n")
                     f.write(f"⚠️  未完整執行的專案 ({len(report['incomplete_projects'])} 個)\n")
                     f.write("-" * 80 + "\n")
-                    f.write(f"{'專案名稱':<50} {'預期':>8} {'實際':>8} {'缺少':>8}\n")
+                    f.write(f"{'專案名稱':<55} {'預期':>10} {'實際':>10}\n")
                     f.write("-" * 80 + "\n")
                     for p in report['incomplete_projects']:
-                        f.write(f"{p['專案名稱']:<50} {p['預期函數數']:>8} {p['實際函數數']:>8} {p['缺少函數數']:>8}\n")
+                        f.write(f"{p['專案名稱']:<55} {p['預期檔案數']:>10} {p['實際檔案數']:>10}\n")
                     f.write("\n")
                 
                 # 執行失敗的專案
@@ -771,10 +765,10 @@ class ProjectManager:
                     f.write("-" * 80 + "\n")
                     f.write(f"❌ 執行失敗的專案 ({len(report['failed_projects'])} 個)\n")
                     f.write("-" * 80 + "\n")
-                    f.write(f"{'專案名稱':<50} {'預期':>8} {'實際':>8} {'缺少':>8}\n")
+                    f.write(f"{'專案名稱':<55} {'預期':>10} {'實際':>10}\n")
                     f.write("-" * 80 + "\n")
                     for p in report['failed_projects']:
-                        f.write(f"{p['專案名稱']:<50} {p['預期函數數']:>8} {p['實際函數數']:>8} {p['缺少函數數']:>8}\n")
+                        f.write(f"{p['專案名稱']:<55} {p['預期檔案數']:>10} {p['實際檔案數']:>10}\n")
                         if p['錯誤訊息']:
                             f.write(f"  錯誤: {p['錯誤訊息']}\n")
                     f.write("\n")

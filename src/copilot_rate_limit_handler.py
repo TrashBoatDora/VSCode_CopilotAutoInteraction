@@ -56,21 +56,20 @@ def wait_and_retry(seconds: int, line_number: int, round_number: int, logger, re
         retry_count: 當前是第幾次重試（0開始）
         
     Note:
-        改良版指數退避策略：每個時間階段重複一次，最大上限 2160 秒
+        改良版指數退避策略：每個時間階段重複一次，最大上限 360 秒（6分鐘）
         - retry_count=0,1: 10秒
         - retry_count=2,3: 60秒
-        - retry_count=4,5: 360秒（6分鐘）
-        - retry_count=6,7,8,9: 2160秒（36分鐘，達到上限）
+        - retry_count=4,5,6,...: 360秒（6分鐘，達到上限）
         
         計算公式：
         1. 計算階段：stage = retry_count // 2
         2. 計算基礎時間：base_time = 10 * (6 ^ stage)
-        3. 應用上限：min(base_time, 2160)
+        3. 應用上限：min(base_time, 360)
     """
     # 改良版指數退避策略：每個階段重複一次，並設置上限
     stage = retry_count // 2  # 每兩次重試進入下一個階段
     base_time = 10 * (6 ** stage)
-    actual_wait_seconds = min(base_time, 2160)  # 最大等待時間為 2160 秒
+    actual_wait_seconds = min(base_time, 360)  # 最大等待時間為 360 秒（6分鐘）
     
     logger.warning(f"⏳ 回應不完整，等待 {actual_wait_seconds} 秒後重試 [輪次: {round_number}, 行號: {line_number}, 重試次數: {retry_count + 1}]")
     logger.info(f"   📊 改良版指數退避策略: stage={stage}, 10 × 6^{stage} = {base_time} 秒 → 實際等待 {actual_wait_seconds} 秒")

@@ -134,7 +134,8 @@ class CheckpointManager:
         completed_project: str = None,
         files_processed_increment: int = None,
         total_files_processed: int = None,
-        baseline_scan_completed: str = None
+        baseline_scan_completed: str = None,
+        line_vulnerability_detected: dict = None
     ) -> None:
         """
         Update checkpoint progress during execution.
@@ -149,6 +150,7 @@ class CheckpointManager:
             files_processed_increment: Number of files to add to total
             total_files_processed: Set total files processed directly
             baseline_scan_completed: 標記指定專案的原始狀態掃描已完成
+            line_vulnerability_detected: 提前終止追蹤字典 {line_index: round_number}
         """
         if self._current_checkpoint is None:
             logger.warning("無法更新進度: 沒有活動的檢查點")
@@ -177,6 +179,11 @@ class CheckpointManager:
             if "baseline_scan_completed" not in progress:
                 progress["baseline_scan_completed"] = {}
             progress["baseline_scan_completed"][baseline_scan_completed] = True
+        if line_vulnerability_detected is not None:
+            # 儲存提前終止追蹤（將 int key 轉為 str 以便 JSON 序列化）
+            progress["line_vulnerability_detected"] = {
+                str(k): v for k, v in line_vulnerability_detected.items()
+            }
         
         self._current_checkpoint["updated_at"] = datetime.now().isoformat()
         self._save_checkpoint()
@@ -297,6 +304,12 @@ class CheckpointManager:
         files_processed = progress.get("total_files_processed", 0)
         remaining_files = max_files - files_processed if max_files > 0 else 0
         
+        # 載入提前終止追蹤（將 str key 轉回 int）
+        line_vuln_detected_raw = progress.get("line_vulnerability_detected", {})
+        line_vulnerability_detected = {
+            int(k): v for k, v in line_vuln_detected_raw.items()
+        } if line_vuln_detected_raw else {}
+        
         return {
             "execution_mode": checkpoint["execution_mode"],
             "project_list": checkpoint["project_list"],
@@ -313,6 +326,7 @@ class CheckpointManager:
             "total_files_processed": files_processed,
             "max_files_limit": max_files,
             "remaining_files_quota": remaining_files,
+            "line_vulnerability_detected": line_vulnerability_detected,  # 新增提前終止追蹤
             "created_at": checkpoint["created_at"],
             "updated_at": checkpoint["updated_at"]
         }

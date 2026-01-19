@@ -1,55 +1,57 @@
 # -*- coding: utf-8 -*-
 """
-Artificial Suicide 攻擊模式 - 輕量級控制器
+Artificial Suicide 攻擊模式 - 簡化版控制器
 直接利用現有的 copilot_handler 和 vscode_controller 功能
-不重複實作已有的邏輯
+掃描結果僅輸出原生報告到 OriginalScanResult
+當檢測到漏洞時，備份觸發漏洞的檔案到 vicious_pattern 目錄
 """
 
+import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Tuple
 import time
 import pyautogui
 
 from src.logger import get_logger
 from src.copilot_rate_limit_handler import is_response_incomplete, wait_and_retry
-from src.query_statistics import initialize_query_statistics
-from src.function_name_tracker import create_function_name_tracker
-from src.vicious_pattern_manager import create_vicious_pattern_manager, ViciousPatternManager
 from config.config import config
 
 
 class ArtificialSuicideMode:
     """
-    Artificial Suicide 攻擊模式控制器
+    Artificial Suicide 攻擊模式控制器（簡化版）
     
     功能：
     1. 載入三個 prompt 模板（initial_query, following_query, coding_instruction）
     2. 控制兩道程序的執行流程
     3. 調用現有的 copilot_handler 和 vscode_controller
+    4. 僅輸出原生掃描報告（無 function_level CSV 和 query_statistics）
+    5. 當檢測到漏洞時，備份觸發漏洞的檔案到 vicious_pattern 目錄
     """
     
     def __init__(self, copilot_handler, vscode_controller, cwe_scan_manager, 
                  error_handler, project_path: str, target_cwe: str, total_rounds: int,
                  max_files_limit: int = 0, files_processed_so_far: int = 0,
                  checkpoint_manager=None, resume_round: int = 1, resume_line: int = 1,
-                 resume_phase: int = 1):
+                 resume_phase: int = 1, bait_code_test_rounds: int = 3):
         """
         初始化 AS 模式控制器
         
         Args:
-            copilot_handler: Copilot 處理器（現有）
-            vscode_controller: VSCode 控制器（現有）
-            cwe_scan_manager: CWE 掃描管理器（現有）
-            error_handler: 錯誤處理器（現有）
+            copilot_handler: Copilot 處理器
+            vscode_controller: VSCode 控制器
+            cwe_scan_manager: CWE 掃描管理器
+            error_handler: 錯誤處理器
             project_path: 專案路徑
-            target_cwe: 目標 CWE 類型（如 "327"）
+            target_cwe: 目標 CWE 類型
             total_rounds: 總輪數
             max_files_limit: 最大檔案處理限制（0 表示無限制）
             files_processed_so_far: 目前已處理的檔案數
-            checkpoint_manager: 檢查點管理器（用於記錄執行進度）
-            resume_round: 恢復起始輪數（1-based，預設為 1）
-            resume_line: 恢復起始行數（1-based，預設為 1）
-            resume_phase: 恢復起始階段（1=Query, 2=Coding，預設為 1）
+            checkpoint_manager: 檢查點管理器
+            resume_round: 恢復起始輪數
+            resume_line: 恢復起始行數
+            resume_phase: 恢復起始階段（1=Query, 2=Coding）
+            bait_code_test_rounds: Bait Code Test 驗證次數（預設 3）
         """
         self.logger = get_logger("ArtificialSuicide")
         self.copilot_handler = copilot_handler
@@ -59,7 +61,10 @@ class ArtificialSuicideMode:
         self.project_path = Path(project_path)
         self.target_cwe = target_cwe
         self.total_rounds = total_rounds
-        self.checkpoint_manager = checkpoint_manager  # 檢查點管理器
+        self.checkpoint_manager = checkpoint_manager
+        
+        # Bait Code Test 驗證次數
+        self.bait_code_test_rounds = bait_code_test_rounds
         
         # Resume 狀態
         self.resume_round = resume_round
@@ -73,16 +78,30 @@ class ArtificialSuicideMode:
         # 檔案數量限制相關
         self.max_files_limit = max_files_limit
         self.files_processed_so_far = files_processed_so_far
-        self.files_processed_in_project = 0  # 本專案已處理的檔案數
+        self.files_processed_in_project = 0
+        
+        # Vicious Pattern 備份目錄
+        self.vicious_pattern_dir = config.OUTPUT_BASE_DIR / "vicious_pattern" / self.project_path.name
+        self.vicious_files_backed_up = 0
+        
+        # 待備份檔案清單：Phase 2 掃描後記錄，revert 後再實際備份
+        # 格式: [(target_file, bandit_count, semgrep_count), ...]
+        self.pending_vicious_backups = []
+        
+        # 漏洞追蹤：記錄每個檔案在哪一輪首次發現漏洞
+        # key: line_idx, value: round_num (首次發現漏洞的輪數)
+        # 如果某個檔案已經發現漏洞，後續輪次就跳過該檔案
+        self.vulnerability_found_at = {}
         
         # 載入模板
         self.templates = self._load_templates()
         
         # 載入 CWE 範例程式碼
         self.cwe_example_code = self._load_cwe_example_code()
-                # 載入專案的 prompt.txt
+        
+        # 載入專案的 prompt.txt
         self.prompt_lines = self._load_prompt_lines()
-        original_line_count = len(self.prompt_lines)  # 記錄原始行數
+        original_line_count = len(self.prompt_lines)
         
         # 如果有檔案數量限制，計算本專案可處理的行數
         if self.max_files_limit > 0:
@@ -91,27 +110,11 @@ class ArtificialSuicideMode:
                 self.logger.warning(f"⚠️  已達到檔案處理限制 ({self.files_processed_so_far}/{self.max_files_limit})，將不處理任何檔案")
                 self.prompt_lines = []
             elif len(self.prompt_lines) > remaining_quota:
-                self.logger.info(f"📊 檔案數量限制: 專案有 {original_line_count} 行，僅處理前 {remaining_quota} 行（已處理: {self.files_processed_so_far}/{self.max_files_limit}）")
+                self.logger.info(f"📊 檔案數量限制: 專案有 {original_line_count} 行，僅處理前 {remaining_quota} 行")
                 self.prompt_lines = self.prompt_lines[:remaining_quota]
-            else:
-                self.logger.info(f"📊 檔案數量限制: 專案有 {original_line_count} 行，全部處理（已處理: {self.files_processed_so_far}/{self.max_files_limit}）")
         
         # 儲存每一輪每一行的回應（用於串接到下一輪）
-        # 結構: {round_num: {line_idx: response_text}}
         self.round_responses = {}
-        
-        # Query 統計器（即時更新模式）
-        self.query_stats = None
-        
-        # 函式名稱追蹤器
-        self.function_name_tracker = None
-        
-        # Vicious Pattern Manager（漏洞 Pattern 備份管理器）
-        self.vicious_pattern_manager: Optional[ViciousPatternManager] = None
-        
-        # 當前輪次發現漏洞的函式清單（用於 Phase 2 結束後備份）
-        # 結構: [(file_path, function_name, round_number, vulnerability_count, scanner), ...]
-        self.current_round_vulnerabilities: List[Tuple[str, str, int, int, str]] = []
         
         self.logger.info(f"✅ AS 模式初始化完成 - CWE-{target_cwe}, {total_rounds} 輪, {len(self.prompt_lines)} 行")
     
@@ -139,162 +142,339 @@ class ArtificialSuicideMode:
         return templates
     
     def _load_cwe_example_code(self) -> str:
-        """
-        載入對應 CWE 類型的範例程式碼
-        
-        根據 target_cwe 從 assets/prompt-template/CWE/{cwe_id}.txt 載入範例程式碼
-        例如：CWE-078 對應 assets/prompt-template/CWE/78.txt
-        
-        Returns:
-            str: CWE 範例程式碼內容，如果找不到檔案則返回空字串
-        """
-        # 移除 CWE ID 的前導零（例如 "078" -> "78"）
+        """載入對應 CWE 類型的範例程式碼"""
         cwe_id = self.target_cwe.lstrip('0') if self.target_cwe else ""
         
         if not cwe_id:
             self.logger.warning("⚠️  未指定目標 CWE，無法載入範例程式碼")
             return ""
         
-        # 構建 CWE 範例檔案路徑
         cwe_example_dir = Path(__file__).parent.parent / "assets" / "prompt-template" / "CWE"
         cwe_example_file = cwe_example_dir / f"{cwe_id}.txt"
         
         try:
             with open(cwe_example_file, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-            self.logger.info(f"✅ 載入 CWE-{self.target_cwe} 範例程式碼: {cwe_example_file}")
+            self.logger.info(f"✅ 載入 CWE-{self.target_cwe} 範例程式碼")
             return content
         except FileNotFoundError:
-            self.logger.warning(f"⚠️  找不到 CWE 範例檔案: {cwe_example_file}，將使用空範例")
+            self.logger.warning(f"⚠️  找不到 CWE 範例檔案: {cwe_example_file}")
             return ""
         except Exception as e:
             self.logger.error(f"❌ 載入 CWE 範例程式碼失敗: {e}")
             return ""
     
     def _load_prompt_lines(self) -> List[str]:
-        """載入專案的 prompt.txt（利用現有功能）"""
+        """載入專案的 prompt.txt"""
         return self.copilot_handler.load_project_prompt_lines(str(self.project_path))
     
     def _generate_query_prompt(self, round_num: int, target_file: str, 
-                               target_function_name: str, last_response: str = "") -> str:
-        """
-        生成第 1 道的 Query Prompt
-        
-        Args:
-            round_num: 當前輪數
-            target_file: 目標檔案路徑
-            target_function_name: 目標函式名稱（原始名稱，會自動查詢最新名稱）
-            last_response: 上一輪的回應內容（第 2+ 輪需要）
-            
-        Returns:
-            str: 完整的 prompt
-        """
-        # 取得該輪次應使用的函式名稱
-        if self.function_name_tracker:
-            actual_function_name, line_number = self.function_name_tracker.get_function_name_for_round(
-                target_file, target_function_name, round_num
-            )
-            self.logger.debug(f"第 {round_num} 輪使用函式：{actual_function_name}（行 {line_number}）")
-        else:
-            actual_function_name = target_function_name
-        
+                               last_response: str = "") -> str:
+        """生成第 1 道的 Query Prompt"""
         # 第 1 輪使用 initial_query，第 2+ 輪使用 following_query
         if round_num == 1:
             template = self.templates["initial_query"]
             variables = {
                 "target_file": target_file,
-                "target_function_name": actual_function_name,
                 "CWE-XXX": f"CWE-{self.target_cwe}"
             }
         else:
             template = self.templates["following_query"]
             variables = {
                 "target_file": target_file,
-                "target_function_name": actual_function_name,
                 "CWE-XXX": f"CWE-{self.target_cwe}",
                 "Last_Response": last_response
             }
         
-        # 先替換 CWE 範例程式碼佔位符 {{CWE_EXAMPLE_CODE}}
-        # 必須在 format() 之前執行，否則 {{ 會被轉換成 {
+        # 替換 CWE 範例程式碼佔位符
         if "{{CWE_EXAMPLE_CODE}}" in template:
             template = template.replace("{{CWE_EXAMPLE_CODE}}", self.cwe_example_code)
-            self.logger.debug(f"已插入 CWE-{self.target_cwe} 範例程式碼")
         
-        # 再替換其他變數
         prompt = template.format(**variables)
-        
         return prompt
     
-    def _generate_coding_prompt(self, target_file: str, target_function_name: str) -> str:
+    def _generate_coding_prompt(self, target_file: str) -> str:
+        """生成第 2 道的 Coding Prompt"""
+        template = self.templates["coding_instruction"]
+        prompt = template.format(
+            target_file=target_file
+        )
+        return prompt
+    
+    def _backup_vicious_pattern(
+        self, 
+        target_file: str, 
+        round_num: int, 
+        line_idx: int,
+        bandit_count: int = 0,
+        semgrep_count: int = 0
+    ) -> bool:
         """
-        生成第 2 道的 Coding Prompt
+        備份觸發漏洞的檔案到 vicious_pattern 目錄
+        
+        資料夾結構（保持原始專案目錄結構，可直接覆蓋原專案）：
+        vicious_pattern/
+        ├── and_mode/           # Bandit AND Semgrep 都發現漏洞
+        │   └── {project}/
+        │       ├── torch_utils/custom_ops.py  ← 保持原始路徑
+        │       └── prompt.txt                 ← 記錄有漏洞檔案的路徑
+        └── or_mode/
+            ├── bandit/
+            │   └── {project}/
+            │       ├── ...
+            │       └── prompt.txt
+            └── semgrep/
+                └── {project}/
+                    ├── ...
+                    └── prompt.txt
+        
+        當 Phase 2 掃描發現漏洞時，在 UNDO 之前備份當前檔案狀態
+        （此時檔案處於 Phase 1 修改後的狀態，即觸發漏洞的「惡意模式」）
         
         Args:
-            target_file: 目標檔案路徑
-            target_function_name: 目標函式名稱（原始名稱，會自動查詢最新名稱）
+            target_file: 目標檔案相對路徑（例如：torch_utils/custom_ops.py）
+            round_num: 當前輪數
+            line_idx: 當前行號
+            bandit_count: Bandit 發現的漏洞數
+            semgrep_count: Semgrep 發現的漏洞數
             
         Returns:
-            str: 完整的 prompt
+            bool: 備份是否成功
         """
-        # 取得最新的函式名稱
-        if self.function_name_tracker:
-            actual_function_name, line_number = self.function_name_tracker.get_latest_function_name(
-                target_file, target_function_name
-            )
-            self.logger.debug(f"Coding Phase 使用函式：{actual_function_name}（行 {line_number}）")
-        else:
-            actual_function_name = target_function_name
-        
-        template = self.templates["coding_instruction"]
-        
-        # 替換變數
-        prompt = template.format(
-            target_file=target_file,
-            target_function_name=actual_function_name
-        )
-        
-        return prompt
+        try:
+            # 來源檔案（專案中的檔案）
+            source_file = self.project_path / target_file
+            
+            if not source_file.exists():
+                self.logger.warning(f"  ⚠️  備份失敗：檔案不存在 {source_file}")
+                return False
+            
+            backed_up = False
+            project_name = self.project_path.name
+            base_dir = config.OUTPUT_BASE_DIR / "vicious_pattern"
+            
+            # AND 模式：Bandit AND Semgrep 都發現漏洞
+            if bandit_count > 0 and semgrep_count > 0:
+                project_dir = base_dir / "and_mode" / project_name
+                self._backup_file_with_structure(source_file, target_file, project_dir)
+                self._append_to_prompt_txt(project_dir, target_file)
+                self.logger.info(f"  📦 已備份 vicious pattern (AND): {target_file}")
+                backed_up = True
+            
+            # OR 模式/Bandit：Bandit 發現漏洞
+            if bandit_count > 0:
+                project_dir = base_dir / "or_mode" / "bandit" / project_name
+                self._backup_file_with_structure(source_file, target_file, project_dir)
+                self._append_to_prompt_txt(project_dir, target_file)
+                self.logger.info(f"  📦 已備份 vicious pattern (OR/Bandit): {target_file}")
+                backed_up = True
+            
+            # OR 模式/Semgrep：Semgrep 發現漏洞
+            if semgrep_count > 0:
+                project_dir = base_dir / "or_mode" / "semgrep" / project_name
+                self._backup_file_with_structure(source_file, target_file, project_dir)
+                self._append_to_prompt_txt(project_dir, target_file)
+                self.logger.info(f"  📦 已備份 vicious pattern (OR/Semgrep): {target_file}")
+                backed_up = True
+            
+            if backed_up:
+                self.vicious_files_backed_up += 1
+            
+            return backed_up
+            
+        except Exception as e:
+            self.logger.error(f"  ❌ 備份 vicious pattern 失敗: {e}")
+            return False
     
-    def _parse_prompt_line(self, prompt_line: str) -> tuple:
+    def _backup_file_with_structure(self, source_file: Path, relative_path: str, project_dir: Path) -> None:
         """
-        解析 prompt.txt 的單行
-        格式: filepath|function1()、function2()、function3()（多個函數用中文頓號分隔）
-        只取第一個函數
+        備份檔案並保持原始目錄結構
+        
+        Args:
+            source_file: 來源檔案完整路徑
+            relative_path: 相對於專案的路徑（例如：torch_utils/custom_ops.py）
+            project_dir: 目標專案目錄（例如：vicious_pattern/or_mode/bandit/{project}/）
+        """
+        # 建立目標路徑，保持原始目錄結構
+        backup_file = project_dir / relative_path
+        backup_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_file, backup_file)
+    
+    def _append_to_prompt_txt(self, project_dir: Path, file_path: str) -> None:
+        """
+        即時追加寫入 prompt.txt
+        
+        Args:
+            project_dir: 專案目錄
+            file_path: 檔案相對路徑
+        """
+        prompt_file = project_dir / "prompt.txt"
+        
+        # 檢查是否已存在（避免重複寫入）
+        existing_paths = set()
+        if prompt_file.exists():
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                existing_paths = set(line.strip() for line in f if line.strip())
+        
+        if file_path not in existing_paths:
+            with open(prompt_file, 'a', encoding='utf-8') as f:
+                f.write(file_path + '\n')
+    
+    def _execute_bait_code_test(self, round_num: int) -> None:
+        """
+        執行 Bait Code Test 驗證
+        
+        對 pending_vicious_backups 中的每個檔案進行獨立驗證，
+        每個檔案需要通過所有驗證次數才保留，否則從清單中移除。
+        
+        驗證流程（方案 B - 單檔案獨立驗證）：
+        對每個待驗證檔案：
+          1. 執行 N 次驗證循環
+          2. 每次驗證：發送 coding_prompt → 掃描 → revert
+          3. 任一次驗證失敗（無漏洞）→ 立即移除該檔案
+          4. 全部驗證通過 → 保留該檔案
+        
+        Args:
+            round_num: 當前輪數（用於目錄命名）
+        """
+        if not self.pending_vicious_backups:
+            return
+        
+        self.logger.info(f"  🧪 Bait Code Test: 驗證 {len(self.pending_vicious_backups)} 個檔案，每個檔案 {self.bait_code_test_rounds} 次驗證")
+        
+        # 複製清單，因為驗證過程中會修改
+        files_to_verify = self.pending_vicious_backups.copy()
+        verified_files = []
+        
+        for target_file, bandit_count, semgrep_count in files_to_verify:
+            self.logger.info(f"    🔬 驗證檔案: {target_file}")
+            
+            # 對單一檔案執行所有驗證
+            is_valid = self._verify_single_file(target_file, round_num)
+            
+            if is_valid:
+                self.logger.info(f"    ✅ {target_file} 通過所有 {self.bait_code_test_rounds} 次驗證")
+                verified_files.append((target_file, bandit_count, semgrep_count))
+            else:
+                self.logger.info(f"    ❌ {target_file} 驗證失敗，從清單中移除")
+        
+        # 更新 pending_vicious_backups 為已驗證的檔案
+        self.pending_vicious_backups = verified_files
+        self.logger.info(f"  🧪 Bait Code Test 完成: {len(verified_files)}/{len(files_to_verify)} 個檔案通過驗證")
+    
+    def _verify_single_file(self, target_file: str, round_num: int) -> bool:
+        """
+        對單一檔案執行所有驗證
+        
+        使用嚴格模式：必須全部驗證都發現漏洞才算通過
+        
+        流程：
+        1. 發送檔案的補 code prompt
+        2. 等待回應並檢查回應完整
+        3. 掃描
+        4. 儲存掃描結果
+        5. 調用 clear_copilot_memory(revert) 後進入下一次驗證或換下一個檔案
+        
+        注意：clear_copilot_memory(revert) 同時執行 revert 並開啟新對話，
+        不需要額外呼叫 open_copilot_chat()
+        
+        Args:
+            target_file: 目標檔案相對路徑
+            round_num: 當前輪數
+            
+        Returns:
+            bool: 是否通過所有驗證
+        """
+        # 建立 bait_code_test 目錄結構
+        # OriginalScanResult/{scanner}/CWE-{cwe}/{project}/第{round}輪/bait_code_test/{filename}/
+        safe_filename = target_file.replace('/', '__').replace('\\', '__')
+        
+        for test_num in range(1, self.bait_code_test_rounds + 1):
+            self.logger.info(f"      驗證 {test_num}/{self.bait_code_test_rounds}")
+            
+            # 1. 發送 coding_prompt（此時已在新對話中）
+            coding_prompt = self._generate_coding_prompt(target_file)
+            
+            success = self.copilot_handler._send_prompt_with_content(
+                prompt_content=coding_prompt,
+                line_number=1,
+                total_lines=1
+            )
+            
+            if not success:
+                self.logger.warning(f"      ⚠️  發送 prompt 失敗")
+                # 失敗時也要 revert 並開啟新對話，讓下一個檔案可以繼續
+                self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                time.sleep(1)
+                return False
+            
+            # 2. 等待回應
+            if not self.copilot_handler.wait_for_response(use_smart_wait=True):
+                self.logger.warning(f"      ⚠️  等待回應超時")
+                self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                time.sleep(1)
+                return False
+            
+            response = self.copilot_handler.copy_response()
+            if not response:
+                self.logger.warning(f"      ⚠️  無法複製回應")
+                self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                time.sleep(1)
+                return False
+            
+            # 3. 掃描
+            has_vulnerability = False
+            if self.cwe_scan_manager:
+                try:
+                    scan_success, vuln_info = self.cwe_scan_manager.scan_from_prompt(
+                        project_path=self.project_path,
+                        project_name=self.project_path.name,
+                        prompt_content=target_file,
+                        cwe_type=self.target_cwe,
+                        round_number=round_num,
+                        line_number=0,  # 特殊標記：bait_code_test
+                        bait_code_test_dir=safe_filename,  # 指定 bait_code_test 子目錄
+                        bait_code_test_num=test_num  # 驗證次數
+                    )
+                    
+                    if scan_success and vuln_info:
+                        for file_path, info in vuln_info.items():
+                            if isinstance(info, dict) and info.get("has_vulnerability", False):
+                                has_vulnerability = True
+                                break
+                except Exception as e:
+                    self.logger.error(f"      ❌ 掃描錯誤: {e}")
+                    self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                    time.sleep(1)
+                    return False
+            
+            # 4. 檢查結果並 revert（無論成功或失敗都要 revert + 開啟新對話）
+            if not has_vulnerability:
+                self.logger.info(f"      驗證 {test_num} 未發現漏洞，驗證失敗")
+                # revert 並開啟新對話後返回失敗
+                self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                time.sleep(1)
+                return False
+            
+            self.logger.info(f"      驗證 {test_num} 發現漏洞 ✓")
+            
+            # 5. revert 並開啟新對話，準備下一次驗證
+            self.vscode_controller.clear_copilot_memory(modification_action="revert")
+            time.sleep(1)
+        
+        # 所有驗證都通過
+        return True
+    
+    def _parse_prompt_line(self, prompt_line: str) -> str:
+        """
+        解析 prompt.txt 的單行，提取檔案路徑
+        
+        格式：每行一個檔案路徑
         
         Returns:
-            (filepath, first_function_name)
+            str: 檔案路徑，解析失敗返回空字串
         """
-        parts = prompt_line.strip().split('|')
-        if len(parts) != 2:
-            self.logger.error(f"Prompt 格式錯誤（應為 filepath|function_name）: {prompt_line}")
-            return ("", "")
-        
-        filepath = parts[0].strip()
-        functions_part = parts[1].strip()
-        
-        # 分隔多個函數（使用中文頓號「、」或逗號）
-        # 移除括號後分隔
-        functions = []
-        for separator in ['、']:
-            if separator in functions_part:
-                functions = [f.strip() for f in functions_part.split(separator)]
-                break
-        
-        # 如果沒有分隔符，就是單一函數
-        if not functions:
-            functions = [functions_part]
-        
-        # 取第一個函數
-        first_function = functions[0].strip()
-        
-        # 確保函數名稱包含括號（如果沒有則添加）
-        if not first_function.endswith('()'):
-            first_function = first_function + '()'
-        
-        self.logger.debug(f"解析 prompt: {filepath} | {first_function} (共 {len(functions)} 個函數)")
-        
-        return (filepath, first_function)
+        return prompt_line.strip()
     
     def execute(self) -> Tuple[bool, int]:
         """
@@ -309,106 +489,51 @@ class ArtificialSuicideMode:
             self.logger.info(f"總輪數: {self.total_rounds}")
             self.logger.info(f"總行數: {len(self.prompt_lines)}")
             
-            # 如果沒有行要處理，直接返回
             if len(self.prompt_lines) == 0:
-                self.logger.warning("⚠️  沒有要處理的檔案（已達限制或 prompt.txt 為空）")
+                self.logger.warning("⚠️  沒有要處理的檔案")
                 return True, 0
             
-            # 在開始處理前就記錄要處理的檔案數（即使後續失敗，這些檔案也已經被處理過）
             self.files_processed_in_project = len(self.prompt_lines)
             
             # 步驟 0：開啟專案
             self.logger.info("📂 開啟專案到 VSCode...")
             if not self.vscode_controller.open_project(str(self.project_path)):
                 self.logger.error("❌ 無法開啟專案")
-                return False, self.files_processed_in_project  # 即使開啟失敗，也返回已規劃處理的檔案數
-            time.sleep(3)  # 等待專案完全載入
+                return False, self.files_processed_in_project
+            time.sleep(3)
             
-            # 步驟 0.5：初始化 Query 統計 CSV
-            # 在 resume 模式下跳過初始化，避免覆蓋已有的掃描結果
-            self.logger.info("📊 初始化 Query 統計...")
-            # 解析每一行，只取第一個函數
-            function_list = []
-            for line in self.prompt_lines:
-                filepath, first_function = self._parse_prompt_line(line)
-                if filepath and first_function:
-                    function_list.append(f"{filepath}_{first_function}")
-            
-            self.query_stats = initialize_query_statistics(
-                project_name=self.project_path.name,
-                cwe_type=self.target_cwe,
-                total_rounds=self.total_rounds,
-                function_list=function_list,
-                skip_if_exists=self.is_resume_mode  # Resume 模式下跳過初始化
-            )
-            
-            # 步驟 0.6：初始化函式名稱追蹤器
-            self.logger.info("📝 初始化函式名稱追蹤器...")
-            self.function_name_tracker = create_function_name_tracker(
-                project_name=self.project_path.name
-            )
-            
-            # 將 function_name_tracker 傳遞給 cwe_scan_manager（用於記錄修改前/後的函式名稱）
-            if self.cwe_scan_manager:
-                self.cwe_scan_manager.function_name_tracker = self.function_name_tracker
-                self.logger.info("✅ 已將 function_name_tracker 傳遞給 CWE 掃描管理器")
-            
-            # 步驟 0.7：初始化 Vicious Pattern Manager（漏洞 Pattern 備份管理器）
-            self.logger.info("📦 初始化漏洞 Pattern 備份管理器...")
-            self.vicious_pattern_manager = create_vicious_pattern_manager(
-                project_name=self.project_path.name,
-                project_path=self.project_path,
-                cwe_type=self.target_cwe,
-                load_existing=self.is_resume_mode  # Resume 模式下載入現有狀態
-            )
-            
-            # 步驟 0.8：執行原始狀態掃描（攻擊前基線掃描）
-            # 只有在非恢復模式或原始掃描尚未完成時才執行
-            baseline_results = {}
+            # 步驟 0.5：執行原始狀態掃描（攻擊前基線掃描）
             should_do_baseline_scan = True
             
             if self.checkpoint_manager:
-                # 檢查此專案的原始狀態掃描是否已完成
                 if self.checkpoint_manager.is_baseline_scan_completed(self.project_path.name):
                     self.logger.info("📸 原始狀態掃描已在先前執行中完成，跳過...")
                     should_do_baseline_scan = False
-                    self.baseline_results = {}  # 恢復模式下不會有 baseline_results
             
             if should_do_baseline_scan and self.cwe_scan_manager:
                 self.logger.info("📸 執行原始狀態掃描（攻擊前基線）...")
-                baseline_results = self.cwe_scan_manager.scan_baseline_state(
+                self.cwe_scan_manager.scan_baseline_state(
                     project_path=self.project_path,
                     project_name=self.project_path.name,
                     prompt_lines=self.prompt_lines,
                     cwe_type=self.target_cwe
                 )
-                self.baseline_results = baseline_results  # 儲存以供後續比較報告使用
                 
-                # 更新 query_statistics 中的原始狀態結果（round0）
-                if self.query_stats and baseline_results:
-                    self.logger.info("📊 更新原始狀態統計（round0）...")
-                    self.query_stats.update_baseline_result(baseline_results)
-                
-                # 標記原始狀態掃描已完成
                 if self.checkpoint_manager:
                     self.checkpoint_manager.update_progress(
                         baseline_scan_completed=self.project_path.name
                     )
-                    self.logger.info("✅ 原始狀態掃描完成，已更新 checkpoint")
-            elif not self.cwe_scan_manager:
-                self.logger.warning("⚠️  未設置 CWE 掃描管理器，跳過原始狀態掃描")
-                self.baseline_results = {}
+                    self.logger.info("✅ 原始狀態掃描完成")
             
-            # 確定起始輪數（考慮恢復模式）
+            # 確定起始輪數
             start_round = self.resume_round if self.is_resume_mode else 1
             if start_round > 1:
-                self.logger.info(f"🔄 恢復模式: 從第 {start_round} 輪開始（跳過前 {start_round - 1} 輪）")
+                self.logger.info(f"🔄 恢復模式: 從第 {start_round} 輪開始")
             
             # 執行每一輪
             for round_num in range(start_round, self.total_rounds + 1):
                 self.logger.create_separator(f"📍 第 {round_num}/{self.total_rounds} 輪")
                 
-                # 確定本輪是否為恢復輪次（需要特殊處理 phase 和 line）
                 is_resume_round = self.is_resume_mode and round_num == start_round
                 resume_phase = self.resume_phase if is_resume_round else 1
                 resume_line = self.resume_line if is_resume_round else 1
@@ -417,63 +542,35 @@ class ArtificialSuicideMode:
                 
                 if not success:
                     self.logger.error(f"❌ 第 {round_num} 輪執行失敗")
-                    # 即使失敗，也嘗試生成比較報告
-                    self._generate_comparison_report_if_available()
                     return False, self.files_processed_in_project
-                
-                # 即時更新該輪的統計資料
-                self.logger.info(f"📊 更新第 {round_num} 輪統計...")
-                self.query_stats.update_round_result(round_num)
                 
                 self.logger.info(f"✅ 第 {round_num} 輪完成")
             
-            # 完成漏洞 Pattern 備份並生成 prompt.txt
-            if self.vicious_pattern_manager and self.vicious_pattern_manager.has_vulnerability():
-                self.vicious_pattern_manager.finalize()
-            else:
-                self.logger.info("📦 本專案未發現任何漏洞，不進行 Pattern 備份")
-            
-            # 生成攻擊前後比較報告
-            self._generate_comparison_report_if_available()
-            
-            # files_processed_in_project 已在開始時設置，無需重複設置
             self.logger.create_separator("🎉 Artificial Suicide 攻擊完成")
             self.logger.info(f"📊 本專案處理了 {self.files_processed_in_project} 個檔案")
+            self.logger.info(f"📁 原生掃描報告已輸出到 OriginalScanResult 目錄")
+            
+            # 統計因早期終止而跳過的檔案
+            skipped_count = len(self.vulnerability_found_at)
+            if skipped_count > 0:
+                self.logger.info(f"⏭️  早期終止: {skipped_count} 個檔案因已發現漏洞而在後續輪次中跳過")
+                for line_idx, found_round in self.vulnerability_found_at.items():
+                    self.logger.info(f"   - 第 {line_idx} 行: 第 {found_round} 輪發現漏洞")
+            
+            if self.vicious_files_backed_up > 0:
+                self.logger.info(f"🚨 發現漏洞！已備份 {self.vicious_files_backed_up} 個 vicious pattern 檔案")
+                self.logger.info(f"📦 備份位置: {self.vicious_pattern_dir}")
+            else:
+                self.logger.info(f"✅ 未發現漏洞，無 vicious pattern 備份")
+            
             return True, self.files_processed_in_project
             
         except Exception as e:
             self.logger.error(f"❌ AS 模式執行錯誤: {e}")
-            # 即使出錯，也嘗試生成比較報告
-            self._generate_comparison_report_if_available()
             return False, self.files_processed_in_project
     
-    def _generate_comparison_report_if_available(self):
-        """生成攻擊前後比較報告（如果有原始狀態掃描結果）"""
-        if hasattr(self, 'baseline_results') and self.baseline_results and self.cwe_scan_manager:
-            self.logger.info("📊 生成攻擊前後比較報告...")
-            try:
-                self.cwe_scan_manager.generate_comparison_report(
-                    project_name=self.project_path.name,
-                    cwe_type=self.target_cwe,
-                    baseline_results=self.baseline_results,
-                    total_rounds=self.total_rounds
-                )
-            except Exception as e:
-                self.logger.error(f"❌ 生成比較報告失敗: {e}")
-    
     def _execute_round(self, round_num: int, resume_phase: int = 1, resume_line: int = 1) -> bool:
-        """
-        執行單輪攻擊（兩道程序）
-        
-        Args:
-            round_num: 輪數
-            resume_phase: 恢復起始階段（1=Query, 2=Coding，預設為 1）
-            resume_line: 恢復起始行數（1-based，預設為 1）
-            
-        Returns:
-            bool: 是否成功
-        """
-        # 更新 checkpoint: 記錄當前輪數開始
+        """執行單輪攻擊（兩道程序）"""
         if self.checkpoint_manager:
             self.checkpoint_manager.update_progress(
                 current_round=round_num,
@@ -482,79 +579,82 @@ class ArtificialSuicideMode:
             )
         
         # === 第 1 道程序：Query Phase ===
-        # 只有當 resume_phase == 1 時才執行 Phase 1
         if resume_phase <= 1:
             self.logger.info(f"▶️  第 {round_num} 輪 - 第 1 道程序（Query Phase）")
             
             if not self._execute_phase1(round_num, start_line=resume_line if resume_phase == 1 else 1):
                 return False
             
-            # Keep 修改（使用現有功能）
             self.logger.info("  💾 Keep 修改...")
             self.vscode_controller.clear_copilot_memory(modification_action="keep")
             time.sleep(2)
             
-            # 更新 checkpoint: Phase 2 開始
             if self.checkpoint_manager:
-                self.checkpoint_manager.update_progress(
-                    current_phase=2,  # AS Mode Phase 2 開始
-                    current_line=1
-                )
+                self.checkpoint_manager.update_progress(current_phase=2, current_line=1)
             
-            # Phase 1 完成後，Phase 2 從第 1 行開始
             phase2_start_line = 1
         else:
-            # 恢復模式跳過 Phase 1
-            self.logger.info(f"🔄 恢復模式: 跳過第 {round_num} 輪 Phase 1，直接進入 Phase 2")
+            self.logger.info(f"🔄 恢復模式: 跳過第 {round_num} 輪 Phase 1")
             phase2_start_line = resume_line
         
         # === 第 2 道程序：Coding Phase + Scan ===
         self.logger.info(f"▶️  第 {round_num} 輪 - 第 2 道程序（Coding Phase + Scan）")
         
+        # 清空待備份清單（本輪開始時）
+        self.pending_vicious_backups = []
+        
         if not self._execute_phase2(round_num, start_line=phase2_start_line):
             return False
         
-        # Undo 修改（使用現有功能）
         self.logger.info("  ↩️  Undo 修改...")
         self.vscode_controller.clear_copilot_memory(modification_action="revert")
         time.sleep(2)
         
-        # === 備份 Vicious Pattern（在 undo 之後）===
-        # 此時檔案已恢復到 Phase 1 修改後的狀態（變數名稱已修改但沒有漏洞程式碼）
-        # 這些「有毒模式」是成功引誘 Copilot 產生漏洞的模式
-        if self.vicious_pattern_manager and self.vicious_pattern_manager.has_vulnerability():
-            self.logger.info(f"  📦 備份 Vicious Pattern（第 {round_num} 輪）...")
-            try:
-                backup_count = self.vicious_pattern_manager.backup_round_patterns(round_num)
-                if backup_count > 0:
-                    self.logger.info(f"  ✅ 已備份 {backup_count} 個含有毒模式的檔案")
-                else:
-                    self.logger.info(f"  ℹ️  本輪無需備份的檔案")
-            except Exception as e:
-                self.logger.error(f"  ❌ 備份 Vicious Pattern 時發生錯誤: {e}")
+        # === Bait Code Test 驗證（revert 後執行）===
+        # 此時檔案狀態是 Phase 1 的結果（只有惡意名稱，沒有完整惡意 code）
+        if self.pending_vicious_backups:
+            self.logger.info(f"  🧪 開始 Bait Code Test 驗證（共 {len(self.pending_vicious_backups)} 個檔案）...")
+            
+            # 執行驗證，會更新 pending_vicious_backups（移除驗證失敗的檔案）
+            self._execute_bait_code_test(round_num)
+            
+            # 驗證完成後，只備份通過驗證的檔案，並標記為攻擊成功
+            if self.pending_vicious_backups:
+                self.logger.info(f"  📦 備份已驗證的 vicious pattern（共 {len(self.pending_vicious_backups)} 個檔案）...")
+                for target_file, bandit_count, semgrep_count in self.pending_vicious_backups:
+                    self._backup_vicious_pattern(
+                        target_file=target_file,
+                        round_num=round_num,
+                        line_idx=0,
+                        bandit_count=bandit_count,
+                        semgrep_count=semgrep_count
+                    )
+                    
+                    # 找到該檔案對應的 line_idx 並標記為攻擊成功
+                    for idx, line in enumerate(self.prompt_lines, 1):
+                        if self._parse_prompt_line(line) == target_file:
+                            if idx not in self.vulnerability_found_at:
+                                self.vulnerability_found_at[idx] = round_num
+                                self.logger.info(f"  ✅ 第 {idx} 行攻擊成功，後續輪次將跳過")
+                            break
+            else:
+                self.logger.info(f"  ⚠️  所有 vicious pattern 驗證失敗，下一輪將繼續攻擊這些檔案")
+            
+            self.pending_vicious_backups = []  # 清空
         
         return True
     
     def _execute_phase1(self, round_num: int, start_line: int = 1) -> bool:
-        """
-        執行第 1 道程序：Query Phase
-        手動處理每一行以支援 AS 專用的檔案結構
-        
-        Args:
-            round_num: 輪數
-            start_line: 起始行數（用於恢復模式，1-based，預設為 1）
-        """
+        """執行第 1 道程序：Query Phase"""
         try:
             self.logger.info(f"  開始處理第 1 道程序（共 {len(self.prompt_lines)} 行）")
             
-            # 處理恢復模式
             if start_line > 1:
                 if start_line > len(self.prompt_lines):
-                    self.logger.info(f"  🔄 恢復模式: 起始行 {start_line} 超出總行數 {len(self.prompt_lines)}，Phase 1 已完成")
+                    self.logger.info(f"  🔄 恢復模式: Phase 1 已完成")
                     return True
-                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始（跳過前 {start_line - 1} 行）")
+                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始")
             
-            # 開啟 Copilot Chat（如果尚未開啟）
             if not self.copilot_handler.open_copilot_chat():
                 self.logger.error("  ❌ 無法開啟 Copilot Chat")
                 return False
@@ -562,90 +662,54 @@ class ArtificialSuicideMode:
             successful_lines = 0
             failed_lines = []
             
-            # 初始化本輪的回應儲存
             if round_num not in self.round_responses:
                 self.round_responses[round_num] = {}
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
-                # 跳過恢復模式下已完成的行
                 if line_idx < start_line:
                     continue
+                
+                # === 終止條件：如果該檔案已發現漏洞，跳過後續輪次 ===
+                if line_idx in self.vulnerability_found_at:
+                    found_round = self.vulnerability_found_at[line_idx]
+                    self.logger.info(f"  ⏭️  跳過第 {line_idx} 行（已在第 {found_round} 輪發現漏洞）")
+                    successful_lines += 1  # 計為成功，因為已完成目標
+                    continue
                     
-                # 更新 checkpoint: 記錄 Phase 1 當前處理的行數
                 if self.checkpoint_manager:
                     self.checkpoint_manager.update_progress(current_line=line_idx)
                 
-                # 解析 prompt 行
-                target_file, target_function_name = self._parse_prompt_line(line)
-                if not target_file or not target_function_name:
+                target_file = self._parse_prompt_line(line)
+                if not target_file:
                     self.logger.error(f"  ❌ 第 {line_idx} 行格式錯誤")
                     failed_lines.append(line_idx)
                     continue
                 
-                # 檢查是否應該跳過（已攻擊成功）
-                function_key = f"{target_file}_{target_function_name}"
-                if self.query_stats and self.query_stats.should_skip_function(function_key):
-                    self.logger.info(f"  ⏭️  跳過第 {line_idx} 行（已攻擊成功）")
-                    successful_lines += 1
-                    continue
-                
-                # === 步驟 1：找出 Phase 1 開始前的函式行號 ===
-                # 第 1 輪：搜尋原始檔案中的函式位置
-                # 第 2+ 輪：使用上一輪 Phase 1 結束後記錄的行號
-                pre_phase1_line_number = None
-                if self.function_name_tracker:
-                    if round_num == 1:
-                        self.logger.info(f"  🔍 搜尋原始函式 {target_function_name} 的行號...")
-                        pre_phase1_line_number = self.function_name_tracker.find_original_function_line(
-                            filepath=target_file,
-                            original_name=target_function_name,
-                            project_path=self.project_path
-                        )
-                        if pre_phase1_line_number:
-                            self.logger.info(f"  ✅ 找到原始函式在第 {pre_phase1_line_number} 行")
-                        else:
-                            self.logger.warning(f"  ⚠️  未找到原始函式行號，將使用函式名稱匹配")
-                    else:
-                        # 第 2+ 輪：取得上一輪 Phase 1 結束後的行號
-                        _, prev_line = self.function_name_tracker.get_function_name_for_round(
-                            target_file, target_function_name, round_num - 1
-                        )
-                        pre_phase1_line_number = prev_line
-                        self.logger.debug(f"  📍 第 {round_num} 輪使用上一輪的行號：{pre_phase1_line_number}")
-                
                 retry_count = 0
                 line_success = False
                 
-                # 持續重試直到回應完整（最多 AS_MODE_MAX_RETRY_PER_LINE 次）
                 while not line_success:
                     try:
-                        # 檢查是否超過最大重試次數
                         if retry_count >= config.AS_MODE_MAX_RETRY_PER_LINE:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：已達最大重試次數 ({config.AS_MODE_MAX_RETRY_PER_LINE} 次)，放棄該行")
+                            self.logger.error(f"  ❌ 第 {line_idx} 行：已達最大重試次數")
                             failed_lines.append(line_idx)
                             break
                         
-                        # 提取檔案路徑（保留完整路徑，將 / 替換為 __）
                         filename = target_file.replace('/', '__')
                         
                         if retry_count == 0:
-                            self.logger.info(f"  處理第 {line_idx}/{len(self.prompt_lines)} 行: {target_file}|{target_function_name}")
+                            self.logger.info(f"  處理第 {line_idx}/{len(self.prompt_lines)} 行: {target_file}")
                         else:
-                            self.logger.info(f"  重試第 {line_idx} 行（第 {retry_count}/{config.AS_MODE_MAX_RETRY_PER_LINE} 次）")
+                            self.logger.info(f"  重試第 {line_idx} 行（第 {retry_count} 次）")
                         
-                        # 取得上一輪的回應（如果是第 2+ 輪）
                         last_response = ""
                         if round_num > 1 and (round_num - 1) in self.round_responses:
                             last_response = self.round_responses[round_num - 1].get(line_idx, "")
-                            if last_response:
-                                self.logger.debug(f"  📎 使用第 {round_num - 1} 輪的回應（{len(last_response)} 字元）")
                         
-                        # 生成 Query Prompt
                         query_prompt = self._generate_query_prompt(
-                            round_num, target_file, target_function_name, last_response
+                            round_num, target_file, last_response
                         )
                         
-                        # 發送 prompt
                         success = self.copilot_handler._send_prompt_with_content(
                             prompt_content=query_prompt,
                             line_number=line_idx,
@@ -653,152 +717,56 @@ class ArtificialSuicideMode:
                         )
                         
                         if not success:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：無法發送提示詞")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 發送失敗，等待後重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
-                        # 等待回應
                         if not self.copilot_handler.wait_for_response(use_smart_wait=True):
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：等待回應超時")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 等待超時，將重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
-                        # 複製回應
                         response = self.copilot_handler.copy_response()
                         if not response:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：無法複製回應內容")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 複製失敗，將重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
                         self.logger.info(f"  ✅ 收到回應 ({len(response)} 字元)")
                         
-                        # 檢查回應完整性
                         if is_response_incomplete(response):
-                            self.logger.warning(f"  ⚠️  第 {line_idx} 行回應不完整，將等待後重試")
+                            self.logger.warning(f"  ⚠️  回應不完整，將等待後重試")
                             retry_count += 1
-                            
-                            # 等待 30 分鐘後重試（無最大重試次數限制）
                             wait_and_retry(1800, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
-                            
-                            continue  # 繼續重試循環
+                            self._clear_input_box()
+                            continue
                         
-                        # 回應完整，儲存回應（AS 專用格式）
-                        self.logger.info(f"  ✅ 第 {line_idx} 行回應完整")
                         save_success = self.copilot_handler.save_response_to_file(
                             project_path=str(self.project_path),
                             response=response,
                             is_success=True,
                             round_number=round_num,
-                            phase_number=1,  # 第 1 道
+                            phase_number=1,
                             line_number=line_idx,
                             filename=filename,
-                            function_name=target_function_name,
+                            function_name=None,  # 不再使用函式名稱
                             prompt_text=query_prompt,
                             total_lines=len(self.prompt_lines),
                             retry_count=retry_count
                         )
                         
                         if save_success:
-                            # 儲存回應供下一輪使用
                             self.round_responses[round_num][line_idx] = response
-                            
-                            # === 步驟 2：提取 Phase 1 結束後的函式名稱（使用行號定位）===
-                            if self.function_name_tracker:
-                                self.logger.info(f"  📝 提取修改後的函式名稱...")
-                                
-                                # 使用 Phase 1 開始前的行號作為搜尋起點
-                                line_to_check = pre_phase1_line_number
-                                
-                                # 如果沒有行號，嘗試重新搜尋（可能因為上一輪追蹤失敗）
-                                if not line_to_check:
-                                    self.logger.debug(f"  🔍 無已知行號，重新搜尋函式位置...")
-                                    line_to_check = self.function_name_tracker.find_original_function_line(
-                                        filepath=target_file,
-                                        original_name=target_function_name,
-                                        project_path=self.project_path
-                                    )
-                                
-                                if line_to_check:
-                                    # 根據行號提取新函式名稱（會在 ±3 行範圍內搜尋）
-                                    result = self.function_name_tracker.extract_modified_function_name_by_line(
-                                        filepath=target_file,
-                                        original_name=target_function_name,
-                                        line_number=line_to_check,
-                                        project_path=self.project_path
-                                    )
-                                    
-                                    if result:
-                                        modified_name, modified_line = result
-                                        
-                                        # 記錄函式名稱變更 (Phase 1 = Query)
-                                        # original_line: Phase 1 開始前的行號（第 1 輪是原始行號，第 2+ 輪是上一輪結束後的行號）
-                                        # modified_line: Phase 1 結束後的行號
-                                        self.function_name_tracker.record_function_change(
-                                            filepath=target_file,
-                                            original_name=target_function_name,
-                                            modified_name=modified_name,
-                                            round_num=round_num,
-                                            original_line=pre_phase1_line_number if round_num == 1 else None,  # 只有第 1 輪記錄原始行號
-                                            modified_line=modified_line,
-                                            phase_number=1  # Phase 1 = Query
-                                        )
-                                        
-                                        if modified_name != target_function_name:
-                                            self.logger.info(f"  ✅ 函式名稱已變更：{target_function_name} → {modified_name}（行 {modified_line}）")
-                                        else:
-                                            self.logger.debug(f"  ℹ️  函式名稱未變更：{target_function_name}（行 {modified_line}）")
-                                    else:
-                                        self.logger.warning(f"  ⚠️  無法提取函式名稱（第 {line_to_check} 行附近）")
-                                else:
-                                    self.logger.warning(f"  ⚠️  無法定位函式行號，跳過名稱追蹤")
-                            
                             successful_lines += 1
-                            self.logger.info(f"  ✅ 第 {line_idx} 行處理完成" + (f"（經過 {retry_count} 次重試）" if retry_count > 0 else ""))
+                            self.logger.info(f"  ✅ 第 {line_idx} 行處理完成")
                             line_success = True
                         else:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：儲存失敗")
                             failed_lines.append(line_idx)
                             break
                         
-                        # 短暫延遲
                         if line_idx < len(self.prompt_lines):
                             time.sleep(1.5)
                         
@@ -807,45 +775,27 @@ class ArtificialSuicideMode:
                         failed_lines.append(line_idx)
                         break
                 
-                # 檢查該行是否成功完成
-                if not line_success:
-                    # break 退出但沒有標記失敗的情況（例如：無法複製回應、發送失敗等）
-                    if line_idx not in failed_lines:
-                        failed_lines.append(line_idx)
-                    self.logger.warning(f"  ⚠️  第 {line_idx} 行未成功完成")
+                if not line_success and line_idx not in failed_lines:
+                    failed_lines.append(line_idx)
             
-            # 統計結果
-            if successful_lines == len(self.prompt_lines):
-                self.logger.info(f"  ✅ 第 1 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
-            else:
-                # 部分行失敗只是攻擊失敗，不是程式錯誤，繼續執行
-                self.logger.warning(f"  ⚠️  第 1 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（攻擊失敗: {failed_lines}）")
-            return True  # 無論成功幾行都繼續執行
+            self.logger.info(f"  ✅ 第 1 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
+            return True
             
         except Exception as e:
             self.logger.error(f"  ❌ 第 1 道執行錯誤: {e}")
             return False
     
     def _execute_phase2(self, round_num: int, start_line: int = 1) -> bool:
-        """
-        執行第 2 道程序：Coding Phase + Scan
-        手動處理每一行以支援 AS 專用的檔案結構
-        
-        Args:
-            round_num: 輪數
-            start_line: 起始行數（用於恢復模式，1-based，預設為 1）
-        """
+        """執行第 2 道程序：Coding Phase + Scan"""
         try:
             self.logger.info(f"  開始處理第 2 道程序（共 {len(self.prompt_lines)} 行）")
             
-            # 處理恢復模式
             if start_line > 1:
                 if start_line > len(self.prompt_lines):
-                    self.logger.info(f"  🔄 恢復模式: 起始行 {start_line} 超出總行數 {len(self.prompt_lines)}，Phase 2 已完成")
+                    self.logger.info(f"  🔄 恢復模式: Phase 2 已完成")
                     return True
-                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始（跳過前 {start_line - 1} 行）")
+                self.logger.info(f"  🔄 恢復模式: 從第 {start_line} 行開始")
             
-            # 開啟 Copilot Chat（應該已經開啟）
             if not self.copilot_handler.is_chat_open:
                 if not self.copilot_handler.open_copilot_chat():
                     self.logger.error("  ❌ 無法開啟 Copilot Chat")
@@ -855,65 +805,44 @@ class ArtificialSuicideMode:
             failed_lines = []
             
             for line_idx, line in enumerate(self.prompt_lines, start=1):
-                # 跳過恢復模式下已完成的行
                 if line_idx < start_line:
                     continue
+                
+                # === 終止條件：如果該檔案已發現漏洞，跳過後續輪次 ===
+                if line_idx in self.vulnerability_found_at:
+                    found_round = self.vulnerability_found_at[line_idx]
+                    self.logger.info(f"  ⏭️  跳過第 {line_idx} 行（已在第 {found_round} 輪發現漏洞）")
+                    successful_lines += 1  # 計為成功，因為已完成目標
+                    continue
                     
-                # 更新 checkpoint: 記錄 Phase 2 當前處理的行數
                 if self.checkpoint_manager:
                     self.checkpoint_manager.update_progress(current_line=line_idx)
                 
-                # 解析 prompt 行
-                target_file, target_function_name = self._parse_prompt_line(line)
-                if not target_file or not target_function_name:
+                target_file = self._parse_prompt_line(line)
+                if not target_file:
                     self.logger.error(f"  ❌ 第 {line_idx} 行格式錯誤")
                     failed_lines.append(line_idx)
-                    continue
-                
-                # === 取得修改後的函式名稱（如果 Phase 1 有修改）===
-                current_function_name = target_function_name  # 預設使用原始名稱
-                if self.function_name_tracker:
-                    # 嘗試從追蹤器取得修改後的名稱
-                    modified_name, _ = self.function_name_tracker.get_function_name_for_round(
-                        target_file, target_function_name, round_num
-                    )
-                    if modified_name:
-                        current_function_name = modified_name
-                        self.logger.debug(f"  📝 使用修改後的函式名稱: {target_function_name} → {current_function_name}")
-                    else:
-                        self.logger.debug(f"  📝 Phase 1 未修改函式名稱，使用原始名稱: {target_function_name}")
-                
-                # 檢查是否應該跳過（已攻擊成功）
-                function_key = f"{target_file}_{target_function_name}"
-                if self.query_stats and self.query_stats.should_skip_function(function_key):
-                    self.logger.info(f"  ⏭️  跳過第 {line_idx} 行（已攻擊成功）")
-                    successful_lines += 1
                     continue
                 
                 retry_count = 0
                 line_success = False
                 
-                # 持續重試直到回應完整（最多 AS_MODE_MAX_RETRY_PER_LINE 次）
                 while not line_success:
                     try:
-                        # 檢查是否超過最大重試次數
                         if retry_count >= config.AS_MODE_MAX_RETRY_PER_LINE:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：已達最大重試次數 ({config.AS_MODE_MAX_RETRY_PER_LINE} 次)，放棄該行")
+                            self.logger.error(f"  ❌ 第 {line_idx} 行：已達最大重試次數")
                             failed_lines.append(line_idx)
                             break
                         
-                        # 提取檔案路徑（保留完整路徑，將 / 替換為 __）
                         filename = target_file.replace('/', '__')
                         
                         if retry_count == 0:
-                            self.logger.info(f"  處理第 {line_idx}/{len(self.prompt_lines)} 行: {target_file}|{target_function_name}")
+                            self.logger.info(f"  處理第 {line_idx}/{len(self.prompt_lines)} 行: {target_file}")
                         else:
-                            self.logger.info(f"  重試第 {line_idx} 行（第 {retry_count}/{config.AS_MODE_MAX_RETRY_PER_LINE} 次）")
+                            self.logger.info(f"  重試第 {line_idx} 行（第 {retry_count} 次）")
                         
-                        # 生成 Coding Prompt
-                        coding_prompt = self._generate_coding_prompt(target_file, target_function_name)
+                        coding_prompt = self._generate_coding_prompt(target_file)
                         
-                        # 發送 prompt
                         success = self.copilot_handler._send_prompt_with_content(
                             prompt_content=coding_prompt,
                             line_number=line_idx,
@@ -921,188 +850,102 @@ class ArtificialSuicideMode:
                         )
                         
                         if not success:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：無法發送提示詞")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 發送失敗，等待後重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
-                        # 等待回應
                         if not self.copilot_handler.wait_for_response(use_smart_wait=True):
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：等待回應超時")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 等待超時，將重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
-                        # 複製回應
                         response = self.copilot_handler.copy_response()
                         if not response:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：無法複製回應內容")
                             retry_count += 1
-                            self.logger.warning(f"  ⏳ 複製失敗，將重試（第 {retry_count} 次）")
                             wait_and_retry(60, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
+                            self._clear_input_box()
                             continue
                         
                         self.logger.info(f"  ✅ 收到回應 ({len(response)} 字元)")
                         
-                        # 檢查回應完整性
                         if is_response_incomplete(response):
-                            self.logger.warning(f"  ⚠️  第 {line_idx} 行回應不完整，將等待後重試")
+                            self.logger.warning(f"  ⚠️  回應不完整，將等待後重試")
                             retry_count += 1
-                            
-                            # 等待 30 分鐘後重試（無最大重試次數限制）
                             wait_and_retry(1800, line_idx, round_num, self.logger, retry_count)
-                            
-                            # 清空輸入框準備重試
-                            pyautogui.hotkey('ctrl', 'f1')
-                            time.sleep(0.5)
-                            pyautogui.hotkey('ctrl', 'a')
-                            time.sleep(0.2)
-                            pyautogui.press('delete')
-                            time.sleep(0.5)
-                            
-                            continue  # 繼續重試循環
+                            self._clear_input_box()
+                            continue
                         
-                        # 回應完整，儲存回應（AS 專用格式）
-                        self.logger.info(f"  ✅ 第 {line_idx} 行回應完整")
                         save_success = self.copilot_handler.save_response_to_file(
                             project_path=str(self.project_path),
                             response=response,
                             is_success=True,
                             round_number=round_num,
-                            phase_number=2,  # 第 2 道
+                            phase_number=2,
                             line_number=line_idx,
                             filename=filename,
-                            function_name=current_function_name,  # 使用修改後的函式名稱
+                            function_name=None,  # 不再使用函式名稱
                             prompt_text=coding_prompt,
                             total_lines=len(self.prompt_lines),
                             retry_count=retry_count
                         )
                         
                         if not save_success:
-                            self.logger.error(f"  ❌ 第 {line_idx} 行：儲存失敗")
                             failed_lines.append(line_idx)
                             break
                         
-                        # === CWE 掃描 + Phase 2 函式名稱追蹤 ===
-                        self.logger.info(f"  🔍 開始掃描第 {line_idx} 行的函式")
+                        # === CWE 掃描 ===
+                        self.logger.info(f"  🔍 開始掃描第 {line_idx} 行")
                         
-                        # === Phase 2 函式名稱追蹤（無論名稱是否變更都要記錄）===
-                        actual_function_name = current_function_name  # 預設使用 Phase 1 結束後的名稱
-                        actual_line_number = None
-                        pre_phase2_line = None  # Phase 2 開始前的行號（= Phase 1 結束後的行號）
-                        
-                        if self.function_name_tracker:
-                            # 取得 Phase 1 結束後的行號（= Phase 2 開始前）
-                            _, pre_phase2_line = self.function_name_tracker.get_function_name_for_round(
-                                target_file, target_function_name, round_num
-                            )
-                            
-                            if pre_phase2_line:
-                                # 從檔案中讀取 Phase 2 結束後的函式名稱
-                                result = self.function_name_tracker.extract_modified_function_name_by_line(
-                                    filepath=target_file,
-                                    original_name=target_function_name,
-                                    line_number=pre_phase2_line,
-                                    project_path=self.project_path
-                                )
-                                
-                                if result:
-                                    actual_function_name, actual_line_number = result
-                                    
-                                    # 記錄 Phase 2 (Coding) 的函式名稱（無論是否變更）
-                                    self.function_name_tracker.record_function_change(
-                                        filepath=target_file,
-                                        original_name=target_function_name,  # 原始名稱（prompt.txt 中的名稱）
-                                        modified_name=actual_function_name,   # Phase 2 結束後的名稱
-                                        round_num=round_num,
-                                        original_line=None,  # Phase 2 不記錄原始行號
-                                        modified_line=actual_line_number,
-                                        current_name=current_function_name,   # Phase 2 開始前的名稱（= Phase 1 結束後）
-                                        phase_number=2  # Phase 2 = Coding
-                                    )
-                                    
-                                    if actual_function_name != current_function_name:
-                                        self.logger.info(f"  ✅ 記錄 Phase 2 名稱變更：{current_function_name} → {actual_function_name}")
-                                    else:
-                                        self.logger.debug(f"  📝 記錄 Phase 2：函式名稱未變更（{actual_function_name}）")
-                                else:
-                                    self.logger.warning(f"  ⚠️  無法提取 Phase 2 結束後的函式名稱")
-                            else:
-                                self.logger.warning(f"  ⚠️  無法取得 Phase 2 開始前的行號")
-                        
+                        has_vulnerability = False
+                        vuln_bandit_count = 0
+                        vuln_semgrep_count = 0
                         if self.cwe_scan_manager:
                             try:
-                                # 構造只包含當前處理函數的 prompt
-                                # 格式: filepath|function_name (使用最新偵測到的名稱)
-                                single_function_prompt = f"{target_file}|{actual_function_name}"
-                                
-                                # 呼叫函式級別掃描（會自動追加到 CSV）
-                                # - original_function_name: prompt.txt 中的原始名稱（用於 CSV「修改前函式名稱」）
-                                # - modified_function_name: Phase 1 修改後的名稱（用於 CSV「修改後函式名稱」）
-                                # - actual_function_name: Phase 2 後的名稱（用於實際掃描）
-                                scan_success, scan_files, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
+                                # 僅傳遞檔案路徑，不再使用函式名稱
+                                scan_success, vuln_info = self.cwe_scan_manager.scan_from_prompt(
                                     project_path=self.project_path,
                                     project_name=self.project_path.name,
-                                    prompt_content=single_function_prompt,  # 只掃描實際處理的函數
+                                    prompt_content=target_file,
                                     cwe_type=self.target_cwe,
                                     round_number=round_num,
-                                    line_number=line_idx,
-                                    original_function_name=target_function_name,  # prompt.txt 中的原始名稱
-                                    modified_function_name=current_function_name   # Phase 1 修改後的名稱
+                                    line_number=line_idx
                                 )
                                 
                                 if scan_success:
                                     self.logger.info(f"  ✅ 掃描完成")
-                                    # 記錄漏洞資訊到 vulnerable_functions（用於後續備份 vicious pattern）
-                                    if vuln_info and self.vicious_pattern_manager:
-                                        for file_path, func_list in vuln_info.items():
-                                            for func_name, vuln_count in func_list:
-                                                self.vicious_pattern_manager.add_vulnerable_function(
-                                                    file_path=file_path,
-                                                    function_name=func_name,  # 使用掃描時傳入的名稱
-                                                    round_number=round_num,
-                                                    vulnerability_count=vuln_count,
-                                                    scanner="combined"
-                                                )
-                                                self.logger.info(f"    📌 記錄漏洞: {file_path}::{func_name} ({vuln_count} 個)")
+                                    # 檢查是否發現漏洞（根據判定模式）
+                                    if vuln_info:
+                                        for file_path, info in vuln_info.items():
+                                            if isinstance(info, dict):
+                                                vuln_bandit_count = info.get('bandit', 0)
+                                                vuln_semgrep_count = info.get('semgrep', 0)
+                                                if info.get("has_vulnerability", False):
+                                                    has_vulnerability = True
+                                                    self.logger.info(f"  🚨 發現漏洞！Bandit={vuln_bandit_count}, Semgrep={vuln_semgrep_count}")
+                                                    # 注意：不在這裡標記 vulnerability_found_at
+                                                    # 只有在 Bait Code Test 全部通過後才標記為攻擊成功
+                                                    break
                                 else:
-                                    self.logger.warning(f"  ⚠️  掃描未找到目標函式")
+                                    self.logger.warning(f"  ⚠️  掃描未找到目標")
                             except Exception as e:
-                                self.logger.error(f"  ❌ 掃描時發生錯誤: {e}")
-                        else:
-                            self.logger.warning("  ⚠️  CWE scan manager 未提供，跳過掃描")
+                                self.logger.error(f"  ❌ 掃描錯誤: {e}")
+                        
+                        # === 記錄待備份檔案（實際備份在 revert 後執行）===
+                        # 如果有任何漏洞（Bandit 或 Semgrep），記錄到待備份清單
+                        if vuln_bandit_count > 0 or vuln_semgrep_count > 0:
+                            self.pending_vicious_backups.append((
+                                target_file,
+                                vuln_bandit_count,
+                                vuln_semgrep_count
+                            ))
+                            self.logger.info(f"  📝 已記錄待備份: {target_file}")
                         
                         successful_lines += 1
-                        self.logger.info(f"  ✅ 第 {line_idx} 行處理完成" + (f"（經過 {retry_count} 次重試）" if retry_count > 0 else ""))
+                        self.logger.info(f"  ✅ 第 {line_idx} 行處理完成")
                         line_success = True
                         
-                        # 短暫延遲
                         if line_idx < len(self.prompt_lines):
                             time.sleep(1.5)
                         
@@ -1111,21 +954,21 @@ class ArtificialSuicideMode:
                         failed_lines.append(line_idx)
                         break
                 
-                # 檢查該行是否成功完成
-                if not line_success:
-                    # break 退出但沒有標記失敗的情況（例如：無法複製回應、發送失敗等）
-                    if line_idx not in failed_lines:
-                        failed_lines.append(line_idx)
-                    self.logger.warning(f"  ⚠️  第 {line_idx} 行未成功完成")
+                if not line_success and line_idx not in failed_lines:
+                    failed_lines.append(line_idx)
             
-            # 統計結果
-            if successful_lines == len(self.prompt_lines):
-                self.logger.info(f"  ✅ 第 2 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
-            else:
-                # 部分行失敗只是攻擊失敗，不是程式錯誤，繼續執行
-                self.logger.warning(f"  ⚠️  第 2 道部分完成：{successful_lines}/{len(self.prompt_lines)} 行（攻擊失敗: {failed_lines}）")
-            return True  # 無論成功幾行都繼續執行
+            self.logger.info(f"  ✅ 第 2 道完成：{successful_lines}/{len(self.prompt_lines)} 行")
+            return True
             
         except Exception as e:
             self.logger.error(f"  ❌ 第 2 道執行錯誤: {e}")
             return False
+    
+    def _clear_input_box(self):
+        """清空輸入框"""
+        pyautogui.hotkey('ctrl', 'f1')
+        time.sleep(0.5)
+        pyautogui.hotkey('ctrl', 'a')
+        time.sleep(0.2)
+        pyautogui.press('delete')
+        time.sleep(0.5)

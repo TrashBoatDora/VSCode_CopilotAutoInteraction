@@ -50,51 +50,214 @@ class CWEVulnerability:
 class CWEDetector:
     """CWE 漏洞檢測器"""
     
-    # 支援的 CWE 列表
+    # ═══════════════════════════════════════════════════════════════════════════
+    # CWE 支援矩陣 (Support Matrix) - 用於論文參考
+    # 掃描工具版本: Bandit 1.9.2, Semgrep 1.147.0
+    # ═══════════════════════════════════════════════════════════════════════════
+    #
+    # | CWE ID  | 漏洞類型                          | Bandit | Semgrep | 備註
+    # |---------|-----------------------------------|--------|---------|------
+    # | CWE-022 | Path Traversal                    |   ✓    |    ✓    |
+    # | CWE-078 | OS Command Injection              |   ✓    |    ✓    |
+    # | CWE-079 | Cross-site Scripting (XSS)        |   ✓    |    ✓    |
+    # | CWE-095 | Code Injection (eval/exec)        |   ✓    |    ✓    |
+    # | CWE-113 | HTTP Response Splitting           |   ✗    |    ✗    | 無語意分析能力
+    # | CWE-117 | Log Injection                     |   ⚠    |    ✗    | Bandit 僅限 logging server
+    # | CWE-326 | Inadequate Encryption Strength    |   ✓    |    ✓    |
+    # | CWE-327 | Broken Cryptographic Algorithm    |   ✓    |    ✓    |
+    # | CWE-329 | Insecure Cipher Mode (ECB/IV)     |   ✓    |    ✓    |
+    # | CWE-347 | Improper JWT Verification         |   ✗    |    ✓    |
+    # | CWE-377 | Insecure Temporary File           |   ✓    |    ✗    |
+    # | CWE-502 | Deserialization of Untrusted Data |   ✓    |    ✓    |
+    # | CWE-643 | XPath/XML Injection               |   ✓    |    ✗    | Bandit 涵蓋 XML 解析器設定
+    # | CWE-760 | Predictable Salt                  |   ✗    |    ✗    | 需 entropy 分析
+    # | CWE-918 | Server-Side Request Forgery       |   ✓    |    ✓    |
+    # | CWE-943 | SQL/NoSQL Injection               |   ✓    |    ✓    |
+    # | CWE-1333| ReDoS (Regex DoS)                 |   ✗    |    ✗    | 需複雜度分析
+    # |---------|-----------------------------------|--------|---------|------
+    # | 總計    | 17 CWEs                           | 13/17  |  11/17  |
+    #
+    # 說明:
+    # - ✓ = 有官方規則支援
+    # - ⚠ = 部分支援（非典型場景）
+    # - ✗ = 無官方規則支援
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # 支援的 CWE 列表（僅限 Bandit + Semgrep 同時支援）
     SUPPORTED_CWES = [
+        "022", "078", "079", "095",
+        "326", "327", "329", "502",
+        "918", "943"
+    ]
+    
+    # 完整 CWE 列表（包含僅單一工具支援或無支援）- 僅供參考
+    ALL_CWES = [
         "022", "078", "079", "095", "113", "117",
         "326", "327", "329", "347", "377", "502",
         "643", "760", "918", "943", "1333"
     ]
     
-    # Bandit 規則映射（完整的 CWE 支援）
+    # ============================================================
+    # Bandit 1.9.2 – CWE Mapping (Academically Corrected v2)
+    # ============================================================
     BANDIT_BY_CWE = {
-        "022": "B202",  # Path Traversal (tarfile)
-        "078": "B102,B601,B602,B603,B604,B605,B606,B607,B609",  # OS Command Injection
-        "079": "B701,B702,B703,B704",  # XSS (Jinja2, Mako, Django, MarkupSafe)
-        "095": "B102,B307",  # Code Injection (exec, eval)
-        "113": "",  # HTTP Response Splitting (Bandit 不支援)
-        "326": "B505",  # Weak Encryption
-        "327": "B304,B305,B324,B413,B502,B503,B504,B508,B509",  # Broken Cryptography (MD5, ciphers, ssl, pycrypto, snmp)
-        "377": "B108,B306",  # Insecure Temporary File (tmp paths, mktemp)
-        "502": "B301,B302,B403,B506,B614",  # Deserialization (Pickle, Marshal, YAML, PyTorch)
-        "643": "B313,B314,B315,B316,B317,B318,B319",  # XPath Injection (XML)
-        "760": "B324",  # Predictable Salt (MD5 usage as proxy)
-        "918": "B310",  # SSRF (urllib)
-        "943": "B608,B610,B611",  # SQL Injection (Hardcoded, Django)
+        "022": "B202",
+        # CWE-22 Path Traversal
+        # ✔ 僅限 tarfile.extractall 的子集合情境
+
+        "078": "B601,B602,B603,B604,B605,B606,B607,B609",
+        # CWE-78 OS Command Injection
+        # ✔ shell=True / subprocess / paramiko 等
+
+        "079": "B308,B701,B702,B703,B704",
+        # CWE-79 XSS
+        # ✔ Jinja2 / Mako / Django mark_safe
+
+        "095": "B102,B307",
+        # CWE-95 Code Injection
+        # ✔ exec / eval 動態程式碼執行
+
+        "113": None,
+        # CWE-113 HTTP Response Splitting
+        # ✖ Bandit 無 HTTP Header 語意分析能力
+
+        "117": "B612",
+        # CWE-117 Log Injection
+        # ⚠ 僅限 logging server listen，非典型 CRLF log injection
+
+        "326": "B505",
+        # CWE-326 Inadequate Encryption Strength
+        # ✔ 弱金鑰長度（RSA / DSA）
+
+        "327": "B303,B304,B305,B324,B413,B502,B503,B504,B508,B509",
+        # CWE-327 Broken or Risky Cryptography
+        # ✔ 弱雜湊、弱模式、弱協議、TLS 設定
+
+        "329": "B305",
+        # CWE-329 Predictable IV
+        # ✔ ECB 等不安全模式（未使用 IV）
+
+        "347": None,
+        # CWE-347 Improper Verification of Cryptographic Signature
+        # ✖ Bandit 不分析 JWT / 簽章驗證流程
+
+        "377": "B108,B306",
+        # CWE-377 Insecure Temporary File
+        # ✔ mktemp / hardcoded tmp 目錄
+
+        "502": "B301,B302,B403,B506",
+        # CWE-502 Deserialization of Untrusted Data
+        # ✔ pickle / marshal / yaml.load / pandas.read_pickle
+
+        "643": "B313,B314,B315,B316,B317,B318,B319,B405,B406,B407,B408,B409",
+        # CWE-643 XPath / XML Injection（廣義 XML Injection）
+        # ✔ XML / lxml / xmlrpc 解析器設定
+
+        "760": None,
+        # CWE-760 Predictable Salt
+        # ✖ 需 entropy 分析，Bandit 不支援
+
+        "918": "B310",
+        # CWE-918 Server-Side Request Forgery (SSRF)
+        # ✔ urllib 支援 file:// scheme
+        # ⚠ 已移除 B113（其屬於 CWE-400 DoS）
+
+        "943": "B608,B610,B611",
+        # CWE-943 SQL Injection
+        # ✔ Raw SQL / Django ORM
+
+        "1333": None,
+        # CWE-1333 ReDoS
+        # ✖ 無正規表示式回溯複雜度分析
     }
     
-    # Semgrep 規則映射（對應 CWE 的 Semgrep 規則）
-    # 注意：所有規則必須使用 r/ 前綴（registry rules）或 p/ 前綴（rulesets）
-    # 規則已通過 validate_semgrep_rules.py 驗證（Python 專案）
+    # ============================================================
+    # Semgrep 1.147.0 – CWE Mapping (Registry Rules Only, v2)
+    # ============================================================
     SEMGREP_BY_CWE = {
-        "022": "config/semgrep_rules.yaml,r/python.lang.security.audit.path-traversal.path-traversal-join,r/python.lang.security.audit.path-traversal.path-traversal-open",  # Path Traversal
-        "078": "config/semgrep_rules.yaml,r/python.lang.security.audit.subprocess-shell-true.subprocess-shell-true,r/python.lang.security.audit.os-system.os-system,r/python.lang.security.audit.os-popen.os-popen",  # OS Command Injection
-        "079": "config/semgrep_rules.yaml,r/python.flask.security.audit.directly-returned-format-string.directly-returned-format-string,r/python.django.security.injection.raw-html-format.raw-html-format",  # XSS
-        "095": "config/semgrep_rules.yaml,r/python.lang.security.audit.eval-detected.eval-detected",  # Code Injection (eval)
-        "113": "config/semgrep_rules.yaml",  # HTTP Response Splitting
-        "117": "config/semgrep_rules.yaml",  # Log Injection
-        "326": "config/semgrep_rules.yaml,r/python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",  # Weak Encryption (RSA)
-        "327": "config/semgrep_rules.yaml,r/python.lang.security.insecure-hash-algorithms-md5.insecure-hash-algorithm-md5",  # Broken Cryptography (MD5)
-        "329": "config/semgrep_rules.yaml,r/python.cryptography.security.insecure-cipher-modes.insecure-cipher-modes",  # Insecure Cipher Mode (ECB)
-        "347": "config/semgrep_rules.yaml,r/python.jwt.security.jwt-none-alg.jwt-none-alg",  # JWT None Algorithm
-        "377": "config/semgrep_rules.yaml,r/python.lang.security.audit.tempfile.mktemp-usage",  # Insecure Temporary File
-        "502": "config/semgrep_rules.yaml,r/python.lang.security.deserialization.pickle.avoid-pickle",  # Deserialization (Pickle)
-        "643": "config/semgrep_rules.yaml,r/python.lang.security.audit.lxml.xpath-injection",  # XPath Injection
-        "760": "config/semgrep_rules.yaml",  # Predictable Salt
-        "918": "config/semgrep_rules.yaml,r/python.flask.security.injection.ssrf-requests.ssrf-requests,r/python.django.security.injection.ssrf.ssrf-injection-requests.ssrf-injection-requests",  # SSRF
-        "943": "config/semgrep_rules.yaml,r/python.sqlalchemy.security.sqlalchemy-sql-injection.sqlalchemy-sql-injection,r/python.django.security.injection.sql.sql-injection,r/python.lang.security.audit.sqli.sql-injection-user-input",  # SQL Injection
-        "1333": "config/semgrep_rules.yaml",  # ReDoS
+        "022": (
+            "r/python.flask.security.injection.path-traversal-open.path-traversal-open,"
+            "r/python.django.security.injection.path-traversal"
+        ),
+        # CWE-22 Path Traversal
+
+        "078": (
+            "r/python.lang.security.audit.subprocess-shell-true.subprocess-shell-true,"
+            "r/python.lang.security.audit.dangerous-system-call"
+        ),
+        # CWE-78 OS Command Injection
+
+        "079": (
+            "r/python.flask.security.audit.directly-returned-format-string.directly-returned-format-string,"
+            "r/python.django.security.injection.raw-html-format.raw-html-format"
+        ),
+        # CWE-79 XSS
+
+        "095": (
+            "r/python.lang.security.audit.eval-detected.eval-detected,"
+            "r/python.lang.security.audit.exec-detected.exec-detected"
+        ),
+        # CWE-95 Code Injection
+
+        "113": None,
+        # CWE-113 HTTP Response Splitting
+        # ✖ 無官方通用規則
+
+        "117": None,
+        # CWE-117 Log Injection
+        # ✖ 多為 CWE-532（敏感資訊寫入 log）
+
+        "326": "r/python.pycryptodome.security.insufficient-rsa-key-size.insufficient-rsa-key-size",
+        # CWE-326 Inadequate Encryption Strength
+        # ✔ 僅金鑰長度，不含 MD5
+
+        "327": (
+            "r/python.lang.security.insecure-hash-algorithms-md5.insecure-hash-algorithm-md5,"
+            "r/python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1"
+        ),
+        # CWE-327 Broken or Risky Cryptography
+
+        "329": "r/python.cryptography.security.insecure-cipher",
+        # CWE-329 Predictable IV / Insecure Mode (ECB)
+
+        "347": "r/python.jwt.security",
+        # CWE-347 Improper Verification of Cryptographic Signature
+        # ✔ 使用 jwt.security 目錄（5 rules）
+
+        "377": None,
+        # CWE-377 Insecure Temporary File
+        # ✖ 無有效的 Semgrep Registry 規則
+
+        "502": (
+            "r/python.lang.security.deserialization.pickle.avoid-pickle,"
+            "r/python.lang.security.deserialization.avoid-pyyaml-load.avoid-pyyaml-load"
+        ),
+        # CWE-502 Deserialization of Untrusted Data
+
+        "643": None,
+        # CWE-643 XPath / XML Injection
+        # ✖ 無有效的 Semgrep Registry 規則（涵蓋 XXE 的規則路徑已失效）
+
+        "760": None,
+        # CWE-760 Predictable Salt
+        # ✖ 非 pattern-based 檢測範圍
+
+        "918": (
+            "r/python.flask.security.injection.ssrf-requests.ssrf-requests,"
+            "r/python.django.security.injection.ssrf.ssrf-injection-requests.ssrf-injection-requests"
+        ),
+        # CWE-918 SSRF
+
+        "943": (
+            "r/python.sqlalchemy.security.sqlalchemy-sql-injection.sqlalchemy-sql-injection,"
+            "r/python.django.security.injection.sql,"
+            "r/python.lang.security.audit.sqli"
+        ),
+        # CWE-943 SQL Injection
+
+        "1333": None,
+        # CWE-1333 ReDoS
+        # ✖ 需 regex 複雜度分析
     }
     
     def __init__(self, output_dir: Path = None):
@@ -563,6 +726,53 @@ class CWEDetector:
         
         return vulnerabilities
     
+    def _backup_scanned_file(
+        self,
+        source_file: Path,
+        output_dir: Path,
+        report_filename: str
+    ) -> Optional[Path]:
+        """
+        備份被掃描的檔案到 scanfile_backup 子資料夾
+        
+        Args:
+            source_file: 被掃描的原始檔案路徑
+            output_dir: 掃描結果的輸出目錄
+            report_filename: 掃描報告的檔名（如 xxx_report.json）
+            
+        Returns:
+            Optional[Path]: 備份檔案的路徑，失敗時返回 None
+        """
+        try:
+            if not source_file.exists():
+                logger.warning(f"備份失敗：原始檔案不存在 {source_file}")
+                return None
+            
+            # 建立 scanfile_backup 子資料夾
+            backup_dir = output_dir / "scanfile_backup"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 從報告檔名推導備份檔名
+            # 例如：pretokenizer__pretokenize.py_report.json → pretokenizer__pretokenize.py
+            if report_filename.endswith("_report.json"):
+                backup_filename = report_filename[:-12]  # 移除 "_report.json"
+            else:
+                # 使用原始檔案的副檔名
+                backup_filename = report_filename.replace(".json", source_file.suffix)
+            
+            backup_file = backup_dir / backup_filename
+            
+            # 複製檔案內容
+            import shutil
+            shutil.copy2(source_file, backup_file)
+            
+            logger.debug(f"✅ 已備份掃描檔案: {backup_file}")
+            return backup_file
+            
+        except Exception as e:
+            logger.error(f"備份掃描檔案失敗: {e}")
+            return None
+    
     def generate_report(
         self,
         vulnerabilities: Dict[str, List[CWEVulnerability]],
@@ -616,7 +826,9 @@ class CWEDetector:
         cwe: str,
         project_name: Optional[str] = None,
         round_number: Optional[int] = None,
-        function_name: Optional[str] = None
+        function_name: Optional[str] = None,
+        bait_code_test_dir: Optional[str] = None,
+        bait_code_test_num: Optional[int] = None
     ) -> List[CWEVulnerability]:
         """
         掃描單一檔案
@@ -627,6 +839,8 @@ class CWEDetector:
             project_name: 專案名稱（用於 OriginalScanResult 目錄結構）
             round_number: 輪數（用於 OriginalScanResult 目錄結構）
             function_name: 函式名稱（用於檔案命名以避免衝突）
+            bait_code_test_dir: Bait Code Test 目錄名稱（檔案名稱）
+            bait_code_test_num: Bait Code Test 驗證次數
             
         Returns:
             List[CWEVulnerability]: 漏洞列表
@@ -678,8 +892,15 @@ class CWEDetector:
             tests = self.BANDIT_BY_CWE[cwe]
             
             # 決定 OriginalScanResult 的保存位置
-            if project_name and round_number is not None and round_number > 0:
-                # 函式級別掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/
+            if bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
+                # Bait Code Test 驗證掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
+                original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
+                original_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                safe_filename = f"驗證{bait_code_test_num}_report.json"
+                original_output_file = original_output_dir / safe_filename
+            elif project_name and round_number is not None and round_number > 0:
+                # 輪次掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/
                 original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -725,6 +946,9 @@ class CWEDetector:
                     vulns = self._parse_bandit_results(original_output_file, cwe, function_name)
                     all_vulns.extend(vulns)
                     logger.debug(f"✅ 原始報告已保存: {original_output_file}")
+                    
+                    # 備份被掃描的檔案
+                    self._backup_scanned_file(file_path, original_output_dir, safe_filename)
             except Exception as e:
                 logger.error(f"Bandit 單檔掃描失敗: {e}")
         
@@ -739,8 +963,15 @@ class CWEDetector:
                 rule_list = rule_patterns
             
             # 決定 OriginalScanResult 的保存位置
-            if project_name and round_number is not None and round_number > 0:
-                # 函式級別掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/
+            if bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
+                # Bait Code Test 驗證掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
+                original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
+                original_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                safe_filename = f"驗證{bait_code_test_num}_report.json"
+                original_output_file = original_output_dir / safe_filename
+            elif project_name and round_number is not None and round_number > 0:
+                # 輪次掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/
                 original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                 original_output_dir.mkdir(parents=True, exist_ok=True)
                 
@@ -806,6 +1037,9 @@ class CWEDetector:
                     vulns = self._parse_semgrep_results(original_output_file, cwe, file_path, function_name)
                     all_vulns.extend(vulns)
                     logger.debug(f"✅ Semgrep 原始報告已保存: {original_output_file}")
+                    
+                    # 備份被掃描的檔案
+                    self._backup_scanned_file(file_path, original_output_dir, safe_filename)
                 else:
                     # 掃描失敗：沒有產生輸出檔案
                     logger.warning(f"Semgrep 掃描失敗，未產生輸出檔案 (return code: {result.returncode})")

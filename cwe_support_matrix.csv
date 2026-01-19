@@ -1,0 +1,18 @@
+CWE_ID,漏洞類型,Bandit,Semgrep,Bandit規則,Semgrep規則,備註
+CWE-022,Path Traversal,✓,✓,B202,r/python.flask.security.injection.path-traversal-open + r/python.django.security.injection.path-traversal,Bandit 僅限 tarfile.extractall
+CWE-078,OS Command Injection,✓,✓,"B601,B602,B603,B604,B605,B606,B607,B609",r/python.lang.security.audit.subprocess-shell-true + r/python.lang.security.audit.dangerous-system-call,shell=True / subprocess / paramiko
+CWE-079,Cross-site Scripting (XSS),✓,✓,"B308,B701,B702,B703,B704",r/python.flask.security.audit.directly-returned-format-string + r/python.django.security.injection.raw-html-format,Jinja2 / Mako / Django mark_safe
+CWE-095,Code Injection (eval/exec),✓,✓,"B102,B307",r/python.lang.security.audit.eval-detected + r/python.lang.security.audit.exec-detected,exec / eval 動態程式碼執行
+CWE-113,HTTP Response Splitting,✗,✗,None,None,無語意分析能力
+CWE-117,Log Injection,⚠,✗,B612,None,Bandit 僅限 logging.config.listen() 非典型場景
+CWE-326,Inadequate Encryption Strength,✓,✓,B505,r/python.pycryptodome.security.insufficient-rsa-key-size,弱金鑰長度 (RSA/DSA)
+CWE-327,Broken Cryptographic Algorithm,✓,✓,"B303,B304,B305,B324,B413,B502,B503,B504,B508,B509",r/python.lang.security.insecure-hash-algorithms-md5 + r/python.cryptography.security.insecure-hash-algorithms,弱雜湊/弱模式/弱協議/TLS設定
+CWE-329,Insecure Cipher Mode (ECB/IV),✓,✓,B305,r/python.cryptography.security.insecure-cipher,ECB 等不安全模式
+CWE-347,Improper JWT Verification,✗,✓,None,r/python.jwt.security,Bandit 不分析 JWT 驗證流程
+CWE-377,Insecure Temporary File,✓,✗,"B108,B306",None,mktemp / hardcoded /tmp 目錄
+CWE-502,Deserialization of Untrusted Data,✓,✓,"B301,B302,B403,B506",r/python.lang.security.deserialization.pickle.avoid-pickle + r/python.lang.security.deserialization.avoid-pyyaml-load,pickle / marshal / yaml.load
+CWE-643,XPath/XML Injection,✓,✗,"B313,B314,B315,B316,B317,B318,B319,B405,B406,B407,B408,B409",None,XML 解析器設定 (涵蓋 XXE)
+CWE-760,Predictable Salt,✗,✗,None,None,需 entropy 分析
+CWE-918,Server-Side Request Forgery (SSRF),✓,✓,B310,r/python.flask.security.injection.ssrf-requests + r/python.django.security.injection.ssrf.ssrf-injection-requests,urllib file:// scheme
+CWE-943,SQL/NoSQL Injection,✓,✓,"B608,B610,B611",r/python.sqlalchemy.security.sqlalchemy-sql-injection + r/python.django.security.injection.sql + r/python.lang.security.audit.sqli,Raw SQL / Django ORM
+CWE-1333,ReDoS (Regex DoS),✗,✗,None,None,需正規表示式複雜度分析

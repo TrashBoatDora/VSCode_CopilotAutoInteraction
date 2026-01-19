@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # 導入所有模組
 from config.config import config
-from src.logger import get_logger, create_project_logger
+from src.logger import get_logger
 from src.project_manager import ProjectManager, ProjectInfo
 from src.vscode_controller import VSCodeController
 from src.copilot_handler import CopilotHandler
@@ -77,6 +77,9 @@ class HybridUIAutomationScript:
         # 檔案處理計數器
         self.total_files_processed = 0  # 已處理的檔案數（累計所有專案的 prompt.txt 行數）
         self.max_files_limit = 0  # 最大處理檔案數限制（0 表示無限制）
+        
+        # 專案級別的統計 {project_name: {"expected_files": n, "processed_files": n}}
+        self.project_stats = {}
         
         self.logger.info("混合式 UI 自動化腳本初始化完成")
     
@@ -141,17 +144,38 @@ class HybridUIAutomationScript:
             if self.resume_mode and resume_info:
                 # 從檢查點恢復設定
                 self.interaction_settings = resume_info['settings']
+                is_as_mode = self.interaction_settings.get('artificial_suicide_mode', False)
+                
                 self.cwe_scan_settings = {
                     'enabled': True,
                     'cwe_type': resume_info['settings'].get('cwe_type', '022'),
                     'output_dir': resume_info['settings'].get('cwe_output_dir', str(config.CWE_RESULT_DIR))
                 }
+                
+                # AS Mode 時才包含 judge_mode
+                if is_as_mode:
+                    self.cwe_scan_settings['judge_mode'] = resume_info['settings'].get('judge_mode', 'or')
+                else:
+                    # 非 AS Mode：恢復提前終止設定
+                    self.cwe_scan_settings['early_termination_enabled'] = resume_info['settings'].get('early_termination_enabled', False)
+                    self.cwe_scan_settings['early_termination_mode'] = resume_info['settings'].get('early_termination_mode', 'or')
+                
                 # 如果啟用 CWE 掃描，初始化掃描管理器
                 if self.cwe_scan_settings.get('enabled'):
-                    self.cwe_scan_manager = CWEScanManager()
+                    from src.cwe_scan_manager import VulnerabilityJudgeMode
+                    
+                    if is_as_mode:
+                        judge_mode = VulnerabilityJudgeMode.AND if self.cwe_scan_settings.get('judge_mode') == 'and' else VulnerabilityJudgeMode.OR
+                        self.cwe_scan_manager = CWEScanManager(judge_mode=judge_mode)
+                        self.logger.info(f"✅ CWE 掃描已恢復 (類型: CWE-{self.cwe_scan_settings['cwe_type']}, 攻擊判定模式: {judge_mode.value.upper()})")
+                    else:
+                        self.cwe_scan_manager = CWEScanManager()
+                        early_term_status = "啟用" if self.cwe_scan_settings.get('early_termination_enabled') else "停用"
+                        early_term_mode = self.cwe_scan_settings.get('early_termination_mode', 'or').upper()
+                        self.logger.info(f"✅ CWE 掃描已恢復 (類型: CWE-{self.cwe_scan_settings['cwe_type']}, 提前終止: {early_term_status}/{early_term_mode})")
+                    
                     self.copilot_handler.cwe_scan_manager = self.cwe_scan_manager
                     self.copilot_handler.cwe_scan_settings = self.cwe_scan_settings
-                    self.logger.info(f"✅ CWE 掃描已恢復 (類型: CWE-{self.cwe_scan_settings['cwe_type']})")
                 
                 # 更新 CopilotHandler
                 self.copilot_handler = CopilotHandler(
@@ -161,6 +185,13 @@ class HybridUIAutomationScript:
                     self.cwe_scan_settings,
                     self.checkpoint_manager  # 傳遞 checkpoint 管理器
                 )
+                
+                # 恢復提前終止追蹤資料
+                line_vuln_detected = resume_info.get('line_vulnerability_detected', {})
+                if line_vuln_detected:
+                    self.copilot_handler.set_early_termination_tracking(line_vuln_detected)
+                    self.logger.info(f"🔄 已恢復提前終止追蹤: {len(line_vuln_detected)} 行已標記")
+                
                 self.logger.info(f"✅ 已從檢查點恢復設定: {self.interaction_settings}")
             elif artificial_suicide_enabled:
                 # 如果啟用 Artificial Suicide 模式，跳過互動設定並使用預設設定
@@ -214,6 +245,8 @@ class HybridUIAutomationScript:
             
             # 建立或更新檢查點（非恢復模式時）
             if not self.resume_mode:
+                is_as_mode = self.interaction_settings.get('artificial_suicide_mode', False) if self.interaction_settings else False
+                
                 checkpoint_settings = {
                     'max_rounds': self.interaction_settings.get('max_rounds', 10) if self.interaction_settings else 10,
                     'max_files': self.max_files_limit,
@@ -224,13 +257,22 @@ class HybridUIAutomationScript:
                     'use_coding_instruction': self.interaction_settings.get('use_coding_instruction', False) if self.interaction_settings else False,
                     'use_smart_wait': self.use_smart_wait,
                     'prompt_source_mode': self.interaction_settings.get('prompt_source_mode', 'project') if self.interaction_settings else 'project',
-                    'artificial_suicide_mode': self.interaction_settings.get('artificial_suicide_mode', False) if self.interaction_settings else False,
+                    'artificial_suicide_mode': is_as_mode,
                     'artificial_suicide_rounds': self.interaction_settings.get('artificial_suicide_rounds', 10) if self.interaction_settings else 10,
                     'interaction_enabled': self.interaction_settings.get('interaction_enabled', True) if self.interaction_settings else True,
                     'include_previous_response': self.interaction_settings.get('include_previous_response', False) if self.interaction_settings else False,
                     'round_delay': self.interaction_settings.get('round_delay', 2) if self.interaction_settings else 2
                 }
-                execution_mode = 'as' if checkpoint_settings.get('artificial_suicide_mode') else 'non_as'
+                
+                # AS Mode 時才儲存 judge_mode，非 AS Mode 時儲存提前終止設定
+                if is_as_mode and self.cwe_scan_settings:
+                    checkpoint_settings['judge_mode'] = self.cwe_scan_settings.get('judge_mode', 'or')
+                elif not is_as_mode and self.cwe_scan_settings:
+                    # 非 AS Mode：儲存提前終止設定
+                    checkpoint_settings['early_termination_enabled'] = self.cwe_scan_settings.get('early_termination_enabled', False)
+                    checkpoint_settings['early_termination_mode'] = self.cwe_scan_settings.get('early_termination_mode', 'or')
+                
+                execution_mode = 'as' if is_as_mode else 'non_as'
                 self.checkpoint_manager.create_checkpoint(
                     execution_mode=execution_mode,
                     project_list=[p.name for p in selected_project_list],
@@ -302,7 +344,9 @@ class HybridUIAutomationScript:
     def _show_cwe_scan_settings_dialog(self):
         """顯示 CWE 掃描設定對話框"""
         try:
-            self.logger.info("顯示 CWE 掃描設定介面")
+            # 判斷是否為 AS Mode
+            is_as_mode = self.interaction_settings.get("artificial_suicide_mode", False)
+            self.logger.info(f"顯示 CWE 掃描設定介面 (AS Mode: {is_as_mode})")
             
             # 載入預設設定
             default_settings = {
@@ -311,7 +355,8 @@ class HybridUIAutomationScript:
                 "output_dir": str(Path("./CWE_Result").absolute())
             }
             
-            settings = show_cwe_scan_settings(default_settings)
+            # 傳入 is_as_mode 以決定是否顯示攻擊判定選項
+            settings = show_cwe_scan_settings(default_settings, is_as_mode=is_as_mode)
             
             if settings is None:
                 # 使用者取消了設定
@@ -324,8 +369,19 @@ class HybridUIAutomationScript:
                 # 如果啟用了掃描，初始化掃描管理器
                 if settings["enabled"]:
                     # 使用 config 中定義的輸出目錄（忽略 UI 中的設定，確保一致性）
-                    self.cwe_scan_manager = CWEScanManager()  # 自動使用 config.CWE_RESULT_DIR
-                    self.logger.info(f"✅ CWE 掃描已啟用 (類型: CWE-{settings['cwe_type']})")
+                    from src.cwe_scan_manager import VulnerabilityJudgeMode
+                    
+                    # AS Mode 時才使用 judge_mode 設定
+                    if is_as_mode:
+                        judge_mode = VulnerabilityJudgeMode.AND if settings.get("judge_mode") == "and" else VulnerabilityJudgeMode.OR
+                        self.cwe_scan_manager = CWEScanManager(judge_mode=judge_mode)
+                        self.logger.info(f"✅ CWE 掃描已啟用 (類型: CWE-{settings['cwe_type']})")
+                        self.logger.info(f"   攻擊判定模式: {judge_mode.value.upper()}")
+                    else:
+                        # 非 AS Mode：不需要攻擊判定功能
+                        self.cwe_scan_manager = CWEScanManager()
+                        self.logger.info(f"✅ CWE 掃描已啟用 (類型: CWE-{settings['cwe_type']})")
+                    
                     self.logger.info(f"   輸出目錄: {self.cwe_scan_manager.output_dir}")
                     
                     # 更新 CopilotHandler 的 CWE 掃描設定
@@ -495,10 +551,15 @@ class HybridUIAutomationScript:
                 
                 # 檢查檔案數量限制（在處理專案前）
                 max_lines_for_project = None  # None 表示無限制
+                project_file_count = config.count_project_prompt_lines(project.path)
+                
+                # 記錄專案的預期檔案數
+                self.project_stats[project.name] = {
+                    "expected_files": project_file_count,
+                    "processed_files": 0
+                }
+                
                 if self.max_files_limit > 0:
-                    # 計算此專案的檔案數量（prompt.txt 行數）
-                    project_file_count = config.count_project_prompt_lines(project.path)
-                    
                     if project_file_count == 0:
                         self.logger.warning(f"專案 {project.name} 沒有 prompt.txt 或檔案為空，跳過")
                         self.skipped_projects += 1
@@ -528,8 +589,15 @@ class HybridUIAutomationScript:
                             f"（已處理: {self.total_files_processed}/{self.max_files_limit}）"
                         )
                 
+                # 記錄專案處理前的檔案數
+                files_before = self.total_files_processed
+                
                 # 處理單一專案（傳遞檔案數量限制）
                 success = self._process_single_project(project, max_lines=max_lines_for_project)
+                
+                # 記錄專案實際處理的檔案數
+                files_processed_in_project = self.total_files_processed - files_before
+                self.project_stats[project.name]["processed_files"] = files_processed_in_project
                 
                 if success:
                     total_success += 1
@@ -596,7 +664,6 @@ class HybridUIAutomationScript:
         Returns:
             bool: 處理是否成功
         """
-        project_logger = None
         start_time = time.time()
         
         try:
@@ -605,15 +672,14 @@ class HybridUIAutomationScript:
                 self.logger.warning(f"收到中斷請求，跳過專案: {project.name}")
                 return False
             
-            # 創建專案專用日誌
-            project_logger = create_project_logger(project.name)
-            project_logger.log("開始處理專案")
+            # 記錄專案開始
+            self.logger.project_start(project.name)
             
             # 更新專案狀態為處理中
             self.project_manager.update_project_status(project.name, "processing")
             
-            # 直接執行專案自動化（移除重試機制，傳遞行數限制）
-            success = self._execute_project_automation(project, project_logger, max_lines=max_lines)
+            # 執行專案自動化
+            success = self._execute_project_automation(project, max_lines=max_lines)
             
             # 計算處理時間
             processing_time = time.time() - start_time
@@ -621,14 +687,14 @@ class HybridUIAutomationScript:
             if success:
                 # 標記專案完成
                 self.project_manager.mark_project_completed(project.name, processing_time)
-                project_logger.success()
+                self.logger.project_success(project.name, processing_time)
                 self.error_handler.reset_consecutive_errors()
                 return True
             else:
                 # 標記專案失敗
                 error_msg = "處理失敗"
                 self.project_manager.mark_project_failed(project.name, error_msg, processing_time)
-                project_logger.failed(error_msg)
+                self.logger.project_failed(project.name, error_msg, processing_time)
                 return False
                 
         except Exception as e:
@@ -636,20 +702,16 @@ class HybridUIAutomationScript:
             error_msg = str(e)
             
             self.project_manager.mark_project_failed(project.name, error_msg, processing_time)
-            
-            if project_logger:
-                project_logger.failed(error_msg)
-            
+            self.logger.project_failed(project.name, error_msg, processing_time)
             self.logger.error(f"處理專案 {project.name} 時發生未捕獲的錯誤: {error_msg}")
             return False
     
-    def _execute_project_automation(self, project: ProjectInfo, project_logger, max_lines: int = None) -> bool:
+    def _execute_project_automation(self, project: ProjectInfo, max_lines: int = None) -> bool:
         """
         執行專案自動化的核心邏輯
         
         Args:
             project: 專案資訊
-            project_logger: 專案日誌記錄器
             max_lines: 最大處理行數限制（None 表示無限制）
             
         Returns:
@@ -660,7 +722,7 @@ class HybridUIAutomationScript:
             if self.error_handler.emergency_stop_requested:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
-            # 判斷是否使用 Artificial Suicide 模式（需要提前判斷以決定是否在這裡開啟專案）
+            # 判斷是否使用 Artificial Suicide 模式
             artificial_suicide_mode = self.interaction_settings.get("artificial_suicide_mode", False) if self.interaction_settings else False
             artificial_suicide_rounds = self.interaction_settings.get("artificial_suicide_rounds", 3) if self.interaction_settings else 3
             
@@ -668,52 +730,49 @@ class HybridUIAutomationScript:
             # 非 AS Mode 則在這裡處理
             if not artificial_suicide_mode:
                 # 步驟1: 開啟專案（僅非 AS Mode）
-                project_logger.log("開啟 VS Code 專案")
+                self.logger.phase_start("開啟 VS Code 專案")
                 if not self.vscode_controller.open_project(project.path):
                     raise AutomationError("無法開啟專案", ErrorType.VSCODE_ERROR)
                 
                 # 檢查中斷請求
                 if self.error_handler.emergency_stop_requested:
                     raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
-                
-                # 注意：不在專案開始時執行 clear_copilot_memory
-                # clear_copilot_memory 會在每輪結束後執行（由 copilot_handler 負責）
             
             # 檢查中斷請求
             if self.error_handler.emergency_stop_requested:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
-            # 步驟3: 處理 Copilot Chat（根據設定判斷是否使用反覆互動或 Artificial Suicide 模式）
-            # 使用互動設定或預設值
+            # 步驟2: 處理 Copilot Chat
             interaction_enabled = self.interaction_settings.get("interaction_enabled", config.INTERACTION_ENABLED) if self.interaction_settings else config.INTERACTION_ENABLED
             max_rounds = self.interaction_settings.get("max_rounds", config.INTERACTION_MAX_ROUNDS) if self.interaction_settings else config.INTERACTION_MAX_ROUNDS
             
             if artificial_suicide_mode:
                 # 使用 Artificial Suicide 攻擊模式
-                project_logger.log(f"處理 Copilot Chat (Artificial Suicide 攻擊模式，輪數: {artificial_suicide_rounds})")
+                self.logger.phase_start("Copilot Chat", f"AS 攻擊模式，輪數: {artificial_suicide_rounds}")
                 
-                # 確定是否為恢復專案（需要傳遞 resume 參數）
+                # 確定是否為恢復專案
                 is_resume_project = self.resume_mode and project.name == self.checkpoint_manager._current_checkpoint['progress'].get('current_project_name')
                 resume_round = self.resume_round if is_resume_project else 1
                 resume_line = self.resume_line if is_resume_project else 1
                 resume_phase = self.resume_phase if is_resume_project else 1
                 
                 success, files_processed = self._execute_artificial_suicide_mode(
-                    project, artificial_suicide_rounds, project_logger, max_lines=max_lines,
+                    project, artificial_suicide_rounds, max_lines=max_lines,
                     resume_round=resume_round, resume_line=resume_line, resume_phase=resume_phase
                 )
                 
-                # 更新檔案計數器（使用實際處理數量）
+                # 更新檔案計數器
                 self.total_files_processed += files_processed
                 self.logger.info(f"📊 已處理 {files_processed} 個檔案（總計: {self.total_files_processed}）")
                 
                 if not success:
                     raise AutomationError("Artificial Suicide 模式執行失敗", ErrorType.COPILOT_ERROR)
+                    
             elif interaction_enabled:
                 # 使用反覆互動功能
-                project_logger.log(f"處理 Copilot Chat (啟用反覆互動功能，最大輪數: {max_rounds})")
+                self.logger.phase_start("Copilot Chat", f"反覆互動模式，最大輪數: {max_rounds}")
                 
-                # 確定是否為恢復專案（需要傳遞 resume 參數）
+                # 確定是否為恢復專案
                 is_resume_project = self.resume_mode and project.name == self.checkpoint_manager._current_checkpoint['progress'].get('current_project_name')
                 if is_resume_project:
                     self.copilot_handler.set_resume_state(
@@ -721,12 +780,10 @@ class HybridUIAutomationScript:
                         resume_line=self.resume_line
                     )
                 else:
-                    # 非恢復專案，重置 resume 狀態
                     self.copilot_handler.set_resume_state(resume_round=1, resume_line=1)
                 
                 success, files_processed = self.copilot_handler.process_project_with_iterations(project.path, max_rounds, max_lines=max_lines)
                 
-                # 更新檔案計數器（使用實際處理數量）
                 self.total_files_processed += files_processed
                 self.logger.info(f"📊 已處理 {files_processed} 個檔案（總計: {self.total_files_processed}）")
                 
@@ -734,109 +791,98 @@ class HybridUIAutomationScript:
                     raise AutomationError("Copilot 反覆互動處理失敗", ErrorType.COPILOT_ERROR)
             else:
                 # 使用一般互動模式
-                project_logger.log(f"處理 Copilot Chat (智能等待: {'開啟' if self.use_smart_wait else '關閉'})")
+                self.logger.phase_start("Copilot Chat", f"智能等待: {'開啟' if self.use_smart_wait else '關閉'}")
                 success, files_processed = self.copilot_handler.process_project_complete(
                     project.path, use_smart_wait=self.use_smart_wait, max_lines=max_lines
                 )
                 
-                # 更新檔案計數器（使用實際處理數量）
                 self.total_files_processed += files_processed
                 self.logger.info(f"📊 已處理 {files_processed} 個檔案（總計: {self.total_files_processed}）")
                 
                 if not success:
-                    raise AutomationError(
-                        "Copilot 處理失敗", 
-                        ErrorType.COPILOT_ERROR
-                    )
+                    raise AutomationError("Copilot 處理失敗", ErrorType.COPILOT_ERROR)
             
             # 檢查中斷請求
             if self.error_handler.emergency_stop_requested:
                 raise AutomationError("收到中斷請求", ErrorType.USER_INTERRUPT)
             
-            # 步驟3.5: CWE 掃描已在 Copilot 互動期間執行（copilot_handler.py 中的 _perform_cwe_scan_for_prompt）
-            # 不需要在此處再次執行掃描，避免重複和誤導
-            
-            # 步驟4: 驗證結果
-            project_logger.log("驗證處理結果")
+            # 步驟3: 驗證結果
+            self.logger.phase_start("驗證處理結果")
             execution_result_dir = config.EXECUTION_RESULT_DIR / "Success"
             project_name = Path(project.path).name
             project_result_dir = execution_result_dir / project_name
             
-            # 檢查新的輪數資料夾結構（AS 模式：第N輪/第N道/）
+            # 檢查新的輪數資料夾結構
             has_success_file = False
             total_files = 0
             round_dirs = []
             
             if project_result_dir.exists():
-                # 查找輪數資料夾 (第1輪, 第2輪, etc.)
                 round_dirs = [d for d in project_result_dir.iterdir() 
                              if d.is_dir() and d.name.startswith('第') and d.name.endswith('輪')]
                 
-                # 統計所有輪數資料夾中的檔案（包含道程序子資料夾）
                 for round_dir in round_dirs:
-                    # 檢查道程序資料夾 (第1道, 第2道, etc.)
                     phase_dirs = [d for d in round_dir.iterdir() 
                                  if d.is_dir() and d.name.startswith('第') and d.name.endswith('道')]
                     
                     if phase_dirs:
-                        # AS 模式：檔案在道程序資料夾中
                         for phase_dir in phase_dirs:
                             files_in_phase = list(phase_dir.glob("*.md"))
                             total_files += len(files_in_phase)
                     else:
-                        # 一般模式：檔案直接在輪數資料夾中
                         files_in_round = list(round_dir.glob("*.md"))
                         total_files += len(files_in_round)
                 
-                # 如果有輪數資料夾且包含檔案，則認為成功
                 has_success_file = len(round_dirs) > 0 and total_files > 0
             
-            # 調試信息
-            self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, "
-                            f"輪數資料夾: {len(round_dirs)}, 總檔案數: {total_files}, "
-                            f"驗證結果: {has_success_file}")
+            self.logger.debug(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, "
+                              f"輪數資料夾: {len(round_dirs)}, 總檔案數: {total_files}")
             
-            if round_dirs:
-                for round_dir in sorted(round_dirs):
-                    # 檢查道程序資料夾
-                    phase_dirs = [d for d in round_dir.iterdir() 
-                                 if d.is_dir() and d.name.startswith('第') and d.name.endswith('道')]
-                    if phase_dirs:
-                        # AS 模式：顯示每道的檔案數
-                        for phase_dir in sorted(phase_dirs):
-                            files_count = len(list(phase_dir.glob("*.md")))
-                            self.logger.info(f"  {round_dir.name}/{phase_dir.name}: {files_count} 個檔案")
-                    else:
-                        # 一般模式：顯示輪數的檔案數
-                        files_count = len(list(round_dir.glob("*.md")))
-                        self.logger.info(f"  {round_dir.name}: {files_count} 個檔案")
-            
-            # 驗證結果（先驗證，再決定是否關閉）
             if not has_success_file:
                 raise AutomationError("缺少成功執行結果檔案", ErrorType.PROJECT_ERROR)
             
-            # 步驟5: 關閉專案（只在驗證成功後才關閉）
-            project_logger.log("關閉 VS Code 專案")
+            self.logger.phase_end("驗證處理結果", success=True)
+            
+            # 步驟4: 生成 all_safe prompt（僅非 AS Mode 且 CWE 掃描已啟用時）
+            if not artificial_suicide_mode and self.cwe_scan_manager and self.cwe_scan_settings and self.cwe_scan_settings.get("enabled"):
+                self.logger.phase_start("生成 all_safe prompt")
+                try:
+                    # 載入原始 prompt.txt
+                    prompt_lines = config.load_project_prompt_lines(project.path)
+                    if prompt_lines:
+                        cwe_type = self.cwe_scan_settings.get("cwe_type", "")
+                        self.cwe_scan_manager.generate_all_safe_prompt(
+                            project_name=project.name,
+                            cwe_type=cwe_type,
+                            max_rounds=max_rounds,
+                            original_prompt_lines=prompt_lines
+                        )
+                        self.logger.phase_end("生成 all_safe prompt", success=True)
+                    else:
+                        self.logger.warning("無法載入 prompt.txt，跳過 all_safe 生成")
+                except Exception as e:
+                    self.logger.warning(f"生成 all_safe prompt 時發生錯誤: {e}")
+            
+            # 步驟5: 關閉專案
+            self.logger.phase_start("關閉 VS Code 專案")
             if not self.vscode_controller.close_current_project():
                 self.logger.warning("專案關閉失敗")
             else:
-                self.logger.info("✅ 專案關閉成功")
+                self.logger.phase_end("關閉 VS Code 專案", success=True)
             
-            project_logger.log("專案處理完成")
             return True
             
         except AutomationError:
             # 確保在異常情況下也關閉 VS Code
             try:
-                project_logger.log("異常情況下關閉 VS Code 專案")
+                self.logger.warning("異常情況下關閉 VS Code 專案")
                 self.vscode_controller.close_current_project()
             except:
                 pass
             raise
         except Exception as e:
-            # 確保在異常情況下也關閉 VS Code
             try:
-                project_logger.log("異常情況下關閉 VS Code 專案")
+                self.logger.warning("異常情況下關閉 VS Code 專案")
                 self.vscode_controller.close_current_project()
             except:
                 pass
@@ -846,7 +892,6 @@ class HybridUIAutomationScript:
         self, 
         project: ProjectInfo, 
         num_rounds: int,
-        project_logger,
         max_lines: int = None,
         resume_round: int = 1,
         resume_line: int = 1,
@@ -858,7 +903,6 @@ class HybridUIAutomationScript:
         Args:
             project: 專案資訊
             num_rounds: 攻擊輪數
-            project_logger: 專案日誌記錄器
             max_lines: 最大處理行數限制（None 表示無限制）
             resume_round: 恢復起始輪數（1-based，預設為 1）
             resume_line: 恢復起始行數（1-based，預設為 1）
@@ -868,29 +912,41 @@ class HybridUIAutomationScript:
             Tuple[bool, int]: (執行是否成功, 實際處理的檔案數)
         """
         try:
-            # 導入 ArtificialSuicideMode（輕量級控制器）
+            # 導入 ArtificialSuicideMode
             try:
                 from src.artificial_suicide_mode import ArtificialSuicideMode
             except ImportError:
                 from artificial_suicide_mode import ArtificialSuicideMode
             
-            # 提取專案名稱和 CWE 類型
             project_name = Path(project.path).name
             
-            # 從專案名稱中提取 CWE 類型（假設格式為 xxx__CWE-XXX__xxx）
-            target_cwe = "327"  # 預設值（只取數字）
-            if "__CWE-" in project_name:
+            # 從 CWE 掃描設定中取得目標 CWE 類型
+            # 優先使用 UI 設定的 cwe_type，如果沒有則嘗試從專案名稱提取
+            target_cwe = ""
+            if self.cwe_scan_settings and self.cwe_scan_settings.get('cwe_type'):
+                target_cwe = self.cwe_scan_settings.get('cwe_type', '')
+            
+            # 如果 UI 沒有設定，嘗試從專案名稱提取（格式: xxx__CWE-XXX__xxx）
+            if not target_cwe and "__CWE-" in project_name:
                 parts = project_name.split("__")
                 for part in parts:
                     if part.startswith("CWE-"):
                         target_cwe = part.replace("CWE-", "")
                         break
             
-            self.logger.info(f"初始化 Artificial Suicide Mode: 專案={project_name}, CWE-{target_cwe}, 輪數={num_rounds}")
+            # 如果仍然沒有，使用預設值
+            if not target_cwe:
+                target_cwe = "022"  # 預設為 CWE-022 (Path Traversal)
+                self.logger.warning(f"⚠️ 未指定 CWE 類型，使用預設值: CWE-{target_cwe}")
+            
+            self.logger.info(f"初始化 AS Mode: 專案={project_name}, CWE-{target_cwe}, 輪數={num_rounds}")
             if resume_round > 1 or resume_line > 1 or resume_phase > 1:
                 self.logger.info(f"🔄 恢復模式: 從第 {resume_round} 輪 Phase {resume_phase} 第 {resume_line} 行繼續")
             
-            # 初始化 ArtificialSuicideMode（直接利用現有模組，並傳遞檔案限制和 resume 參數）
+            # 取得 Bait Code Test 設定
+            bait_code_test_rounds = self.cwe_scan_settings.get('bait_code_test_rounds', 3) if self.cwe_scan_settings else 3
+            
+            # 初始化 ArtificialSuicideMode
             as_mode = ArtificialSuicideMode(
                 copilot_handler=self.copilot_handler,
                 vscode_controller=self.vscode_controller,
@@ -904,141 +960,68 @@ class HybridUIAutomationScript:
                 checkpoint_manager=self.checkpoint_manager,
                 resume_round=resume_round,
                 resume_line=resume_line,
-                resume_phase=resume_phase
+                resume_phase=resume_phase,
+                bait_code_test_rounds=bait_code_test_rounds
             )
             
             # 執行攻擊流程
-            self.logger.info("開始執行 Artificial Suicide 攻擊流程...")
+            self.logger.info("開始執行 AS 攻擊流程...")
             success, files_processed = as_mode.execute()
             
             if success:
-                project_logger.log(f"✅ Artificial Suicide 攻擊模式執行成功（處理了 {files_processed} 個檔案）")
-                self.logger.info(f"Artificial Suicide 攻擊模式執行成功（處理了 {files_processed} 個檔案）")
+                self.logger.info(f"✅ AS Mode 執行成功（處理了 {files_processed} 個檔案）")
             else:
-                project_logger.log(f"❌ Artificial Suicide 攻擊模式執行失敗（已處理 {files_processed} 個檔案）")
-                self.logger.error(f"Artificial Suicide 攻擊模式執行失敗（已處理 {files_processed} 個檔案）")
+                self.logger.error(f"❌ AS Mode 執行失敗（已處理 {files_processed} 個檔案）")
             
             return success, files_processed
             
         except Exception as e:
-            error_msg = f"Artificial Suicide 模式執行時發生錯誤: {e}"
-            self.logger.error(error_msg)
-            project_logger.log(f"❌ {error_msg}")
+            self.logger.error(f"AS Mode 執行時發生錯誤: {e}")
             import traceback
             traceback.print_exc()
             return False, 0
     
-    def _execute_cwe_scan(self, project: ProjectInfo, project_logger) -> bool:
+    def _build_execution_settings_for_report(self) -> dict:
         """
-        執行 CWE 函式級別掃描（逐行模式）
+        構建用於報告的執行設定字典
         
-        ⚠️ DEPRECATED: 此方法已不再被使用。
-        CWE 掃描現在在 Copilot 互動期間執行（copilot_handler.py 中的 _perform_cwe_scan_for_prompt）。
-        保留此方法僅作為參考，未來版本可能會移除。
-        
-        Args:
-            project: 專案資訊
-            project_logger: 專案日誌記錄器
-            
         Returns:
-            bool: 掃描是否成功
+            dict: 執行設定字典
         """
-        import warnings
-        warnings.warn(
-            "_execute_cwe_scan() is deprecated. CWE scanning is now performed during Copilot interaction.",
-            DeprecationWarning,
-            stacklevel=2
-        )
+        settings = {}
         
-        try:
-            if not self.cwe_scan_manager:
-                self.logger.warning("CWE 掃描管理器未初始化")
-                return False
+        if self.interaction_settings:
+            is_as_mode = self.interaction_settings.get('artificial_suicide_mode', False)
+            settings['artificial_suicide_mode'] = is_as_mode
             
-            project_name = Path(project.path).name
-            cwe_type = self.cwe_scan_settings["cwe_type"]
-            
-            self.logger.info(f"開始執行 CWE-{cwe_type} 函式級別掃描（逐行模式）...")
-            
-            # 讀取專案的 prompt 檔案
-            prompt_source_mode = self.interaction_settings.get(
-                "prompt_source_mode", 
-                config.PROMPT_SOURCE_MODE
-            ) if self.interaction_settings else config.PROMPT_SOURCE_MODE
-            
-            # 根據 prompt 來源模式讀取 prompt
-            if prompt_source_mode == "project":
-                # 專案專用提示詞模式：讀取專案目錄下的 prompt.txt
-                prompt_file = Path(project.path) / config.PROJECT_PROMPT_FILENAME
-                if not prompt_file.exists():
-                    self.logger.warning(f"專案提示詞檔案不存在: {prompt_file}")
-                    return False
+            if is_as_mode:
+                settings['artificial_suicide_rounds'] = self.interaction_settings.get('artificial_suicide_rounds', 10)
             else:
-                # 全域提示詞模式：讀取 prompts/prompt1.txt
-                prompt_file = config.PROMPT1_FILE_PATH
-                if not prompt_file.exists():
-                    self.logger.warning(f"全域提示詞檔案不存在: {prompt_file}")
-                    return False
+                settings['max_rounds'] = self.interaction_settings.get('max_rounds', 1)
             
-            # 逐行讀取 prompt 內容
-            with open(prompt_file, 'r', encoding='utf-8') as f:
-                prompt_lines = [line.strip() for line in f.readlines() if line.strip()]
+            settings['use_coding_instruction'] = self.interaction_settings.get('use_coding_instruction', False)
+            settings['copilot_chat_modification_action'] = self.interaction_settings.get('copilot_chat_modification_action', 'revert')
+        
+        if self.cwe_scan_settings:
+            settings['cwe_enabled'] = self.cwe_scan_settings.get('enabled', False)
+            settings['cwe_type'] = self.cwe_scan_settings.get('cwe_type', '')
             
-            if not prompt_lines:
-                self.logger.warning(f"提示詞檔案為空: {prompt_file}")
-                return False
+            is_as_mode = self.interaction_settings and self.interaction_settings.get('artificial_suicide_mode', False)
             
-            total_lines = len(prompt_lines)
-            self.logger.info(f"提示詞檔案共 {total_lines} 行，將逐行掃描...")
-            
-            # 逐行執行函式級別掃描
-            successful_scans = 0
-            failed_scans = 0
-            
-            for line_number, prompt_line in enumerate(prompt_lines, 1):
-                try:
-                    self.logger.info(f"掃描第 {line_number}/{total_lines} 行...")
-                    
-                    # 執行函式級別掃描（返回值增加了 vuln_info）
-                    success, result_file, vuln_info = self.cwe_scan_manager.scan_from_prompt_function_level(
-                        project_path=Path(project.path),
-                        project_name=project_name,
-                        prompt_content=prompt_line,
-                        cwe_type=cwe_type,
-                        round_number=1,
-                        line_number=line_number
-                    )
-                    
-                    if success:
-                        self.logger.info(f"✅ 第 {line_number} 行掃描完成")
-                        successful_scans += 1
-                    else:
-                        self.logger.warning(f"⚠️  第 {line_number} 行掃描失敗")
-                        failed_scans += 1
-                        
-                except Exception as e:
-                    self.logger.error(f"第 {line_number} 行掃描時發生錯誤: {e}")
-                    failed_scans += 1
-            
-            # 輸出掃描摘要
-            self.logger.create_separator(f"CWE-{cwe_type} 掃描摘要")
-            self.logger.info(f"總計: {total_lines} 行")
-            self.logger.info(f"成功: {successful_scans} 行")
-            self.logger.info(f"失敗: {failed_scans} 行")
-            
-            if successful_scans > 0:
-                project_logger.log(f"CWE-{cwe_type} 函式級別掃描完成 ({successful_scans}/{total_lines} 行)")
-                return True
+            # AS Mode 時才記錄 judge_mode 和 bait_code_test_rounds
+            if is_as_mode:
+                settings['judge_mode'] = self.cwe_scan_settings.get('judge_mode', 'or')
+                settings['bait_code_test_rounds'] = self.cwe_scan_settings.get('bait_code_test_rounds', 3)
             else:
-                self.logger.warning("所有行掃描都失敗")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"執行 CWE 掃描時發生錯誤: {e}")
-            return False
-
-    
-
+                # Raw Mode 時記錄 all_safe_enabled 和 early_termination 設定
+                settings['all_safe_enabled'] = self.cwe_scan_settings.get('all_safe_enabled', True)
+                settings['early_termination_enabled'] = self.cwe_scan_settings.get('early_termination_enabled', False)
+                settings['early_termination_mode'] = self.cwe_scan_settings.get('early_termination_mode', 'or')
+        
+        settings['use_smart_wait'] = self.use_smart_wait
+        settings['max_files'] = self.max_files_limit
+        
+        return settings
     
     def _generate_final_report(self):
         """生成最終報告"""
@@ -1061,10 +1044,15 @@ class HybridUIAutomationScript:
                 self.logger.warning(f"總錯誤次數: {error_summary['total_errors']}")
                 self.logger.warning(f"最近錯誤: {error_summary['recent_errors']}")
             
-            # 保存專案摘要報告（傳遞函數處理統計）
+            # 構建執行設定（用於報告）
+            execution_settings = self._build_execution_settings_for_report()
+            
+            # 保存專案摘要報告（傳遞檔案處理統計和執行設定）
             report_file = self.project_manager.save_summary_report(
                 total_files_processed=self.total_files_processed,
-                max_files_limit=self.max_files_limit
+                max_files_limit=self.max_files_limit,
+                execution_settings=execution_settings,
+                project_stats=self.project_stats
             )
             if report_file:
                 self.logger.info(f"詳細報告已儲存: {report_file}")
