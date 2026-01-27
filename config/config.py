@@ -67,8 +67,6 @@ class Config:
     # 圖像資源路徑
     STOP_BUTTON_IMAGE = ASSETS_DIR / "stop_button.png"
     SEND_BUTTON_IMAGE = ASSETS_DIR / "send_button.png"
-    NEWCHAT_SAVE_IMAGE = ASSETS_DIR / "NewChat_Save.png"
-    UNDO_CHECK_IMAGE = ASSETS_DIR / "undo_check.png"
     
     # ==================== 多輪互動設定 ====================
     INTERACTION_MAX_ROUNDS = 3      # 最大互動輪數

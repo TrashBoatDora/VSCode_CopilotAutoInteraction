@@ -500,83 +500,6 @@ class ImageRecognition:
             self.logger.error(f"點擊 Copilot 複製按鈕時發生錯誤: {str(e)}")
             return False
     
-    def check_newchat_save_dialog(self, timeout: int = 2) -> bool:
-        """
-        檢查是否出現 NewChat_Save 對話框
-        
-        Args:
-            timeout: 檢查超時時間（秒）
-            
-        Returns:
-            bool: 是否檢測到 NewChat_Save 對話框
-        """
-        try:
-            self.logger.debug("檢查是否出現保存新聊天對話框...")
-            
-            # 在指定時間內檢查是否出現 NewChat_Save 圖像
-            start_time = time.time()
-            check_interval = 0.5  # 檢查間隔
-            
-            while time.time() - start_time < timeout:
-                newchat_save_location = self.find_image_on_screen(
-                    str(config.NEWCHAT_SAVE_IMAGE),
-                    confidence=config.IMAGE_CONFIDENCE
-                )
-                
-                if newchat_save_location:
-                    self.logger.info("✅ 檢測到保存新聊天對話框")
-                    return True
-                
-                time.sleep(check_interval)
-            
-            self.logger.debug("未檢測到保存新聊天對話框")
-            return False
-            
-        except Exception as e:
-            self.logger.debug(f"檢查保存新聊天對話框時發生錯誤: {str(e)}")
-            return False
-    
-    def handle_newchat_save_dialog(self, action: str = "keep") -> bool:
-        """
-        處理 NewChat_Save 對話框
-        
-        Args:
-            action: 處理行為 - "keep"(保留並繼續) 或 "revert"(復原修改)
-        
-        Returns:
-            bool: 處理是否成功
-        """
-        try:
-            if action == "keep":
-                self.logger.info("處理保存新聊天對話框，按下 Enter 保留並繼續...")
-                pyautogui.press('left')
-                time.sleep(1)
-                pyautogui.press('right')
-                time.sleep(1)
-                pyautogui.press('enter')
-                time.sleep(1)
-                self.logger.info("✅ 已按下 Enter，保留並繼續聊天")
-            elif action == "revert":
-                self.logger.info("處理保存新聊天對話框，按右鍵後按 Enter 復原修改...")
-                pyautogui.press('left')
-                time.sleep(1)
-                pyautogui.press('left')
-                time.sleep(1)
-                pyautogui.press('enter')
-                time.sleep(1)
-                self.logger.info("✅ 已按右鍵+Enter，復原修改")
-            else:
-                self.logger.warning(f"⚠️ 未知的處理行為: {action}，使用預設行為 'keep'")
-                pyautogui.press('enter')
-                time.sleep(1)
-                self.logger.info("✅ 使用預設行為，保留並繼續聊天")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"處理保存新聊天對話框時發生錯誤: {str(e)}")
-            return False
-    
     def validate_required_images(self) -> bool:
         """
         驗證所需的圖像資源是否可用（更新後的版本：檢查必要圖像和可選圖像）
@@ -591,14 +514,8 @@ class ImageRecognition:
                 config.SEND_BUTTON_IMAGE
             ]
             
-            # 可選的圖像（不會導致驗證失敗）
-            optional_images = [
-                config.NEWCHAT_SAVE_IMAGE
-            ]
-            
             missing_images = []
             invalid_images = []
-            missing_optional = []
             
             # 檢查必需圖像
             for image_path in required_images:
@@ -613,19 +530,6 @@ class ImageRecognition:
                     except Exception:
                         invalid_images.append(str(image_path))
             
-            # 檢查可選圖像
-            for image_path in optional_images:
-                if not image_path.exists():
-                    missing_optional.append(str(image_path))
-                else:
-                    # 驗證可選圖像有效性
-                    try:
-                        img = cv2.imread(str(image_path))
-                        if img is not None:
-                            self.logger.debug(f"可選圖像可用: {image_path.name}")
-                    except Exception:
-                        missing_optional.append(str(image_path))
-            
             if missing_images:
                 self.logger.warning("缺少必需圖像資源:")
                 for img in missing_images:
@@ -635,13 +539,6 @@ class ImageRecognition:
                 self.logger.warning("無效的必需圖像資源:")
                 for img in invalid_images:
                     self.logger.warning(f"  - {img}")
-            
-            if missing_optional:
-                self.logger.debug("缺少可選圖像資源（不影響功能）:")
-                for img in missing_optional:
-                    self.logger.debug(f"  - {img}")
-            
-            # 即使有缺失圖像也不會失敗，因為現在是可選的
             if missing_images or invalid_images:
                 self.logger.info("圖像識別功能不可用，將使用鍵盤操作替代方案")
                 return True
@@ -723,11 +620,3 @@ def clear_notifications() -> bool:
 def check_copilot_status_with_auto_clear() -> dict:
     """檢查 Copilot 狀態並自動清除通知的便捷函數"""
     return image_recognition.check_copilot_response_status_with_auto_clear()
-
-def check_newchat_save_dialog(timeout: int = 2) -> bool:
-    """檢查是否出現保存新聊天對話框的便捷函數"""
-    return image_recognition.check_newchat_save_dialog(timeout)
-
-def handle_newchat_save_dialog(action: str = "keep") -> bool:
-    """處理保存新聊天對話框的便捷函數"""
-    return image_recognition.handle_newchat_save_dialog(action)
