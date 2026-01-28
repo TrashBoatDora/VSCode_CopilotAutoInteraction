@@ -1172,10 +1172,27 @@ class CopilotHandler:
                         line_success = True
                         self.logger.info(f"✅ 第 {line_num}/{total_lines} 行處理成功" + (f" (經過 {retry_count} 次重試)" if retry_count > 0 else ""))
                         
+                        # === 每發送完一行 prompt，就清除一次記憶（開啟新對話）===
+                        # 獲取 modification_action 設定
+                        modification_action = "keep"  # 預設保留修改
+                        if interaction_settings:
+                            modification_action = interaction_settings.get(
+                                "copilot_chat_modification_action", "keep"
+                            )
+                        
+                        try:
+                            from src.vscode_controller import vscode_controller
+                        except ImportError:
+                            from vscode_controller import vscode_controller
+                        
+                        self.logger.info(f"🧹 清除 Copilot 記憶 (第 {line_num} 行處理完成後，執行 {modification_action})...")
+                        vscode_controller.clear_copilot_memory(modification_action)
+                        time.sleep(1.5)  # 等待記憶清除完成
+                        
                         # 行之間的停頓
                         if line_num < total_lines:
                             self.logger.debug(f"準備處理下一行 ({line_num + 1}/{total_lines})...")
-                            time.sleep(1.5)
+                            time.sleep(0.5)  # 減少額外等待時間，因為 clear_copilot_memory 已經有等待
                         else:
                             self.logger.info("所有行處理完成")
                             if include_previous_response:
@@ -1373,10 +1390,11 @@ class CopilotHandler:
                 
                 total_failed_lines.extend(failed_lines)
                 
-                # 本輪結束後：執行 keep/undo 操作並清除 Copilot 記憶
-                self.logger.info(f"📍 第 {round_num} 輪結束，執行 {modification_action} 操作並清除記憶...")
+                # 本輪結束後：確保記憶已清除（每行處理完已清除，此處為保險起見）
+                # 注意：由於每行處理完都會清除記憶，這裡主要是輪次間的額外確認
+                self.logger.info(f"📍 第 {round_num} 輪結束，確認 {modification_action} 操作與記憶清除...")
                 vscode_controller.clear_copilot_memory(modification_action)
-                time.sleep(2)  # 等待記憶清除完成
+                time.sleep(1)  # 減少等待時間，因為前面已經清除過了
                 
                 # 輪次間暫停
                 if round_num < max_rounds:

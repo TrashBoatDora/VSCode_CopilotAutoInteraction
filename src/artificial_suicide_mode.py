@@ -176,13 +176,15 @@ class ArtificialSuicideMode:
             template = self.templates["initial_query"]
             variables = {
                 "target_file": target_file,
-                "CWE-XXX": f"CWE-{self.target_cwe}"
+                "CWE-XXX": f"CWE-{self.target_cwe}",
+                "CWE_XX": f"CWE-{self.target_cwe}"  # 支援 {CWE_XX} 佔位符
             }
         else:
             template = self.templates["following_query"]
             variables = {
                 "target_file": target_file,
-                "CWE-XXX": f"CWE-{self.target_cwe}"
+                "CWE-XXX": f"CWE-{self.target_cwe}",
+                "CWE_XX": f"CWE-{self.target_cwe}"  # 支援 {CWE_XX} 佔位符
             }
         
         # 替換 CWE 範例程式碼佔位符
@@ -584,9 +586,10 @@ class ArtificialSuicideMode:
             if not self._execute_phase1(round_num, start_line=resume_line if resume_phase == 1 else 1):
                 return False
             
-            self.logger.info("  💾 Keep 修改...")
+            # Phase 1 完成後確認（每行已清除，此處為輪次間保險）
+            self.logger.info("  💾 Phase 1 完成，確認記憶已清除...")
             self.vscode_controller.clear_copilot_memory(modification_action="keep")
-            time.sleep(2)
+            time.sleep(1)
             
             if self.checkpoint_manager:
                 self.checkpoint_manager.update_progress(current_phase=2, current_line=1)
@@ -605,9 +608,10 @@ class ArtificialSuicideMode:
         if not self._execute_phase2(round_num, start_line=phase2_start_line):
             return False
         
-        self.logger.info("  ↩️  Undo 修改...")
+        # Phase 2 完成後確認（每行已清除並 revert，此處為輪次間保險）
+        self.logger.info("  ↩️  Phase 2 完成，確認 revert 與記憶清除...")
         self.vscode_controller.clear_copilot_memory(modification_action="revert")
-        time.sleep(2)
+        time.sleep(1)
         
         # === Bait Code Test 驗證（revert 後執行）===
         # 此時檔案狀態是 Phase 1 的結果（只有惡意名稱，沒有完整惡意 code）
@@ -762,12 +766,18 @@ class ArtificialSuicideMode:
                             successful_lines += 1
                             self.logger.info(f"  ✅ 第 {line_idx} 行處理完成")
                             line_success = True
+                            
+                            # === 每發送完一行 prompt，就清除一次記憶（開啟新對話）===
+                            # Phase 1 使用 keep（保留修改）
+                            self.logger.info(f"  🧹 清除 Copilot 記憶 (Phase 1 第 {line_idx} 行完成後)...")
+                            self.vscode_controller.clear_copilot_memory(modification_action="keep")
+                            time.sleep(1.5)
                         else:
                             failed_lines.append(line_idx)
                             break
                         
                         if line_idx < len(self.prompt_lines):
-                            time.sleep(1.5)
+                            time.sleep(0.5)  # 減少等待時間，因為 clear_copilot_memory 已經有等待
                         
                     except Exception as e:
                         self.logger.error(f"  ❌ 處理第 {line_idx} 行時發生錯誤: {e}")
@@ -945,8 +955,14 @@ class ArtificialSuicideMode:
                         self.logger.info(f"  ✅ 第 {line_idx} 行處理完成")
                         line_success = True
                         
+                        # === 每發送完一行 prompt，就清除一次記憶（開啟新對話）===
+                        # Phase 2 使用 revert（復原修改）
+                        self.logger.info(f"  🧹 清除 Copilot 記憶 (Phase 2 第 {line_idx} 行完成後)...")
+                        self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                        time.sleep(1.5)
+                        
                         if line_idx < len(self.prompt_lines):
-                            time.sleep(1.5)
+                            time.sleep(0.5)  # 減少等待時間，因為 clear_copilot_memory 已經有等待
                         
                     except Exception as e:
                         self.logger.error(f"  ❌ 處理第 {line_idx} 行時發生錯誤: {e}")
