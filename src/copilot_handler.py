@@ -1193,10 +1193,11 @@ class CopilotHandler:
             self.logger.info(f"成功處理: {successful_lines}/{total_lines} 行")
             
             # 顯示提前終止統計
+            skipped_by_early_termination = 0
             if self.line_vulnerability_detected:
-                skipped_count = sum(1 for ln in range(1, total_lines + 1) if self.is_line_terminated(ln))
-                if skipped_count > 0:
-                    self.logger.info(f"🛑 跳過（提前終止）: {skipped_count} 行")
+                skipped_by_early_termination = sum(1 for ln in range(1, total_lines + 1) if self.is_line_terminated(ln))
+                if skipped_by_early_termination > 0:
+                    self.logger.info(f"🛑 跳過（提前終止）: {skipped_by_early_termination} 行")
             
             if failed_lines:
                 self.logger.warning(f"失敗行數: {len(failed_lines)}")
@@ -1205,7 +1206,16 @@ class CopilotHandler:
                 if len(failed_lines) > 5:
                     self.logger.warning(f"  ... 還有 {len(failed_lines) - 5} 個錯誤")
             
-            return successful_lines > 0, successful_lines, failed_lines
+            # 判斷成功條件：
+            # 1. 有成功處理的行
+            # 2. 或者所有行都因提前終止而被跳過（這也是預期的正常結束）
+            all_lines_terminated = (skipped_by_early_termination == total_lines)
+            is_success = (successful_lines > 0) or all_lines_terminated
+            
+            if all_lines_terminated and successful_lines == 0:
+                self.logger.info(f"✅ 本輪所有行均因發現漏洞提前終止，視為正常完成")
+            
+            return is_success, successful_lines, failed_lines
             
         except Exception as e:
             error_msg = f"專案專用模式處理失敗: {str(e)}"
@@ -1386,13 +1396,25 @@ class CopilotHandler:
             if total_failed_lines:
                 self.logger.warning(f"總計失敗行數: {len(total_failed_lines)}")
             
+            # 檢查是否所有行都因提前終止而被跳過
+            all_lines_terminated = False
+            if self.line_vulnerability_detected:
+                terminated_count = sum(1 for ln in range(1, total_lines + 1) if self.is_line_terminated(ln))
+                all_lines_terminated = (terminated_count == total_lines)
+                if all_lines_terminated:
+                    self.logger.info(f"✅ 所有 {total_lines} 行均因發現漏洞提前終止，專案處理正常完成")
+            
             # 互動完成後的穩定期
             cooldown_time = 3
             self.logger.info(f"所有互動輪次完成，進入穩定期 {cooldown_time} 秒...")
             time.sleep(cooldown_time)
             
             # 返回成功狀態和第一輪實際處理的行數（不乘以輪數，避免重複計算）
-            return overall_success and (first_round_successful_lines > 0), first_round_successful_lines
+            # 成功條件：
+            # 1. overall_success 為 True 且有成功處理的行
+            # 2. 或者所有行都因提前終止而被跳過（這也是預期的正常結束）
+            is_success = (overall_success and first_round_successful_lines > 0) or all_lines_terminated
+            return is_success, first_round_successful_lines
             
         except Exception as e:
             self.logger.error(f"專案專用模式處理失敗: {str(e)}")
