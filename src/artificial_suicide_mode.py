@@ -182,8 +182,7 @@ class ArtificialSuicideMode:
             template = self.templates["following_query"]
             variables = {
                 "target_file": target_file,
-                "CWE-XXX": f"CWE-{self.target_cwe}",
-                "Last_Response": last_response
+                "CWE-XXX": f"CWE-{self.target_cwe}"
             }
         
         # 替換 CWE 範例程式碼佔位符
