@@ -214,7 +214,8 @@ class CWEScanManager:
             
         Returns:
             Tuple[bool, Optional[Dict[str, Dict[str, int]]]]: 
-                (是否成功, 漏洞資訊字典 {file_path: {"bandit": count, "semgrep": count, "total": count}})
+                (是否成功, 漏洞資訊字典 {file_path: {"bandit": count, "semgrep": count, "total": count, "has_vulnerability": bool, "scan_parseable": bool}})
+                其中 scan_parseable 表示檔案是否能被掃描器正確解析（無語法錯誤）
         """
         try:
             self.logger.create_separator(f"CWE-{cwe_type} 掃描: {project_name}")
@@ -251,6 +252,21 @@ class CWEScanManager:
                     bait_code_test_num=bait_code_test_num
                 )
                 
+                # 分別檢查 Bandit 和 Semgrep 的掃描狀態
+                bandit_failed = [v for v in vulnerabilities 
+                                if v.scanner == ScannerType.BANDIT and v.scan_status == 'failed']
+                semgrep_failed = [v for v in vulnerabilities 
+                                 if v.scanner == ScannerType.SEMGREP and v.scan_status == 'failed']
+                
+                # 判斷各掃描器是否能正確解析（無語法錯誤）
+                bandit_parseable = not any('syntax error' in (v.failure_reason or '').lower() 
+                                          for v in bandit_failed)
+                semgrep_parseable = not any('syntax error' in (v.failure_reason or '').lower() 
+                                           for v in semgrep_failed)
+                
+                # 整體是否能被解析（向後相容）
+                scan_parseable = bandit_parseable and semgrep_parseable
+                
                 # 分別統計 Bandit 和 Semgrep 的漏洞
                 bandit_vulns = [v for v in vulnerabilities 
                               if v.scanner == ScannerType.BANDIT 
@@ -268,17 +284,25 @@ class CWEScanManager:
                 # 根據判定模式決定是否有漏洞
                 has_vuln = self._judge_vulnerability(bandit_count, semgrep_count)
                 
+                # 記錄掃描結果（包含各掃描器的 parseable 資訊）
+                vulnerability_info[file_path] = {
+                    "bandit": bandit_count,
+                    "semgrep": semgrep_count,
+                    "total": total_count,
+                    "has_vulnerability": has_vuln,  # 根據判定模式的結果
+                    "scan_parseable": scan_parseable,  # 整體是否能被正確解析（向後相容）
+                    "bandit_parseable": bandit_parseable,  # Bandit 是否能解析
+                    "semgrep_parseable": semgrep_parseable  # Semgrep 是否能解析
+                }
+                
                 if total_count > 0:
-                    vulnerability_info[file_path] = {
-                        "bandit": bandit_count,
-                        "semgrep": semgrep_count,
-                        "total": total_count,
-                        "has_vulnerability": has_vuln  # 根據判定模式的結果
-                    }
                     total_vulns += total_count
-                    
                     if has_vuln:
                         has_any_vulnerability = True
+                
+                # 如果有語法錯誤，記錄警告
+                if not scan_parseable:
+                    self.logger.warning(f"  {file_path}: ⚠️ 檔案有語法錯誤 (Bandit可解析={bandit_parseable}, Semgrep可解析={semgrep_parseable})")
                 
                 mode_str = self.judge_mode.value.upper()
                 if has_vuln:

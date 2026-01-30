@@ -593,21 +593,29 @@ class CWEDetector:
                 for error in errors:
                     error_msg = error.get("message", "Unknown error")
                     error_code = error.get("code", 0)
+                    error_type = error.get("type", "")  # Semgrep 的錯誤類型，如 "Syntax error"
+                    error_path = error.get("path", str(project_path))  # 錯誤發生的檔案路徑
+                    
+                    # 組合錯誤原因，包含錯誤類型
+                    if error_type:
+                        failure_reason = f"{error_type} (code {error_code}): {error_msg}"
+                    else:
+                        failure_reason = f"Error code {error_code}: {error_msg}"
                     
                     vuln = CWEVulnerability(
                         cwe_id=cwe,
-                        file_path=str(project_path),
+                        file_path=error_path,  # 使用錯誤中的路徑
                         line_start=0,  # 錯誤時沒有行號
                         line_end=0,
                         function_name=function_name,  # 標記是哪個函式的掃描失敗了
                         scanner=ScannerType.SEMGREP,
                         scan_status='failed',
-                        failure_reason=f"Error code {error_code}: {error_msg}",
+                        failure_reason=failure_reason,
                         severity='',
                         description=''
                     )
                     vulnerabilities.append(vuln)
-                    logger.warning(f"Semgrep 掃描錯誤 (code {error_code}): {error_msg}")
+                    logger.warning(f"Semgrep 掃描錯誤: {failure_reason}")
                 
                 return vulnerabilities
             
