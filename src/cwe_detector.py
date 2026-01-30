@@ -836,7 +836,8 @@ class CWEDetector:
         round_number: Optional[int] = None,
         function_name: Optional[str] = None,
         bait_code_test_dir: Optional[str] = None,
-        bait_code_test_num: Optional[int] = None
+        bait_code_test_num: Optional[int] = None,
+        save_result: bool = True
     ) -> List[CWEVulnerability]:
         """
         掃描單一檔案
@@ -849,6 +850,7 @@ class CWEDetector:
             function_name: 函式名稱（用於檔案命名以避免衝突）
             bait_code_test_dir: Bait Code Test 目錄名稱（檔案名稱）
             bait_code_test_num: Bait Code Test 驗證次數
+            save_result: 是否保存掃描報告（Phase 1 掃描設為 False）
             
         Returns:
             List[CWEVulnerability]: 漏洞列表
@@ -891,169 +893,211 @@ class CWEDetector:
             
             return failure_records
         
-        logger.info(f"掃描單一檔案: {file_path} (CWE-{cwe})")
+        if save_result:
+            logger.info(f"掃描單一檔案: {file_path} (CWE-{cwe})")
+        else:
+            logger.debug(f"Phase 1 掃描: {file_path} (CWE-{cwe})")
         
         all_vulns = []
         
-        # Bandit 掃描
-        if ScannerType.BANDIT in self.available_scanners and cwe in self.BANDIT_BY_CWE:
-            tests = self.BANDIT_BY_CWE[cwe]
-            
-            # 決定 OriginalScanResult 的保存位置
-            if bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
-                # Bait Code Test 驗證掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
-                original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                safe_filename = f"驗證{bait_code_test_num}_report.json"
-                original_output_file = original_output_dir / safe_filename
-            elif project_name and round_number is not None and round_number > 0:
-                # 輪次掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/
-                original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 使用目錄前綴和檔案名稱（不包含函式名稱）
-                file_parts = file_path.parts
-                if len(file_parts) >= 2:
-                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
-                else:
-                    base_name = file_path.name
-                
-                # 只使用檔案名稱，不加入函式名稱
-                safe_filename = f"{base_name}_report.json"
-                    
-                original_output_file = original_output_dir / safe_filename
-            elif project_name and round_number == 0:
-                # 原始狀態掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/原始狀態/
-                original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 使用目錄前綴和檔案名稱
-                file_parts = file_path.parts
-                if len(file_parts) >= 2:
-                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
-                else:
-                    base_name = file_path.name
-                
-                safe_filename = f"{base_name}_report.json"
-                original_output_file = original_output_dir / safe_filename
-            else:
-                # 無專案名稱的單檔掃描：OriginalScanResult/Bandit/single_file/CWE-{cwe}/
-                original_output_dir = self.bandit_original_dir / "single_file" / f"CWE-{cwe}"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 只使用檔案名稱（不包含函式名稱）
-                original_output_file = original_output_dir / f"{file_path.name}_report.json"
-            
-            bandit_cmd = ".venv/bin/bandit" if self._check_command(".venv/bin/bandit") else "bandit"
-            cmd = [bandit_cmd, str(file_path), "-t", tests, "-f", "json", "-o", str(original_output_file)]
-            
-            try:
-                subprocess.run(cmd, capture_output=True, timeout=60)
-                if original_output_file.exists():
-                    vulns = self._parse_bandit_results(original_output_file, cwe, function_name)
-                    all_vulns.extend(vulns)
-                    logger.debug(f"✅ 原始報告已保存: {original_output_file}")
-                    
-                    # 備份被掃描的檔案
-                    self._backup_scanned_file(file_path, original_output_dir, safe_filename)
-            except Exception as e:
-                logger.error(f"Bandit 單檔掃描失敗: {e}")
+        # 用於臨時掃描的目錄（save_result=False 時使用）
+        temp_dir = None
+        if not save_result:
+            import tempfile
+            temp_dir = Path(tempfile.mkdtemp(prefix="phase1_scan_"))
         
-        # Semgrep 掃描
-        if ScannerType.SEMGREP in self.available_scanners and cwe in self.SEMGREP_BY_CWE:
-            rule_patterns = self.SEMGREP_BY_CWE[cwe]
-            
-            # 將規則字符串分割成列表（支援逗號分隔的多個規則）
-            if isinstance(rule_patterns, str):
-                rule_list = [r.strip() for r in rule_patterns.split(",")]
-            else:
-                rule_list = rule_patterns
-            
-            # 決定 OriginalScanResult 的保存位置
-            if bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
-                # Bait Code Test 驗證掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
-                original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
-                original_output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            # Bandit 掃描
+            if ScannerType.BANDIT in self.available_scanners and cwe in self.BANDIT_BY_CWE:
+                tests = self.BANDIT_BY_CWE[cwe]
                 
-                safe_filename = f"驗證{bait_code_test_num}_report.json"
-                original_output_file = original_output_dir / safe_filename
-            elif project_name and round_number is not None and round_number > 0:
-                # 輪次掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/
-                original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 使用目錄前綴和檔案名稱（不包含函式名稱）
-                file_parts = file_path.parts
-                if len(file_parts) >= 2:
-                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
-                else:
-                    base_name = file_path.name
-                
-                # 只使用檔案名稱，不加入函式名稱
-                safe_filename = f"{base_name}_report.json"
+                # 當 save_result=False 時使用臨時目錄
+                if temp_dir:
+                    original_output_dir = temp_dir
+                    safe_filename = "bandit_temp_report.json"
+                    original_output_file = temp_dir / safe_filename
+                # 決定 OriginalScanResult 的保存位置
+                elif bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
+                    # Bait Code Test 驗證掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
+                    original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                original_output_file = original_output_dir / safe_filename
-            elif project_name and round_number == 0:
-                # 原始狀態掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/原始狀態/
-                original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 使用目錄前綴和檔案名稱
-                file_parts = file_path.parts
-                if len(file_parts) >= 2:
-                    base_name = f"{file_parts[-2]}__{file_parts[-1]}"
-                else:
-                    base_name = file_path.name
-                
-                safe_filename = f"{base_name}_report.json"
-                original_output_file = original_output_dir / safe_filename
-            else:
-                # 無專案名稱的單檔掃描：OriginalScanResult/Semgrep/single_file/CWE-{cwe}/
-                original_output_dir = self.semgrep_original_dir / "single_file" / f"CWE-{cwe}"
-                original_output_dir.mkdir(parents=True, exist_ok=True)
-                
-                # 只使用檔案名稱（不包含函式名稱）
-                original_output_file = original_output_dir / f"{file_path.name}_report.json"
-            
-            # 構建 Semgrep 命令
-            semgrep_cmd = ".venv/bin/semgrep" if self._check_command(".venv/bin/semgrep") else "semgrep"
-            cmd = [semgrep_cmd, "scan"]
-            
-            # 添加規則
-            for rule in rule_list:
-                if rule.startswith('p/') or rule.startswith('r/'):
-                    cmd.extend(["--config", rule])
-                elif rule.endswith('.yaml') or rule.endswith('.yml') or ':' in rule:
-                    cmd.extend(["--config", rule])
-                else:
-                    cmd.extend(["--config", f"r/{rule}"])
-            
-            cmd.extend([
-                "--json",
-                "--output", str(original_output_file),
-                "--quiet",
-                "--disable-version-check",
-                "--metrics", "off",
-                str(file_path)
-            ])
-            
-            try:
-                result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
-                
-                if original_output_file.exists():
-                    vulns = self._parse_semgrep_results(original_output_file, cwe, file_path, function_name)
-                    all_vulns.extend(vulns)
-                    logger.debug(f"✅ Semgrep 原始報告已保存: {original_output_file}")
+                    safe_filename = f"驗證{bait_code_test_num}_report.json"
+                    original_output_file = original_output_dir / safe_filename
+                elif project_name and round_number is not None and round_number > 0:
+                    # 輪次掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/第N輪/
+                    original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 備份被掃描的檔案
-                    self._backup_scanned_file(file_path, original_output_dir, safe_filename)
-                else:
-                    # 掃描失敗：沒有產生輸出檔案
-                    logger.warning(f"Semgrep 掃描失敗，未產生輸出檔案 (return code: {result.returncode})")
+                    # 使用目錄前綴和檔案名稱（不包含函式名稱）
+                    file_parts = file_path.parts
+                    if len(file_parts) >= 2:
+                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    else:
+                        base_name = file_path.name
                     
-                    # 創建失敗記錄
-                    error_msg = result.stderr.strip() if result.stderr else "No output file generated"
+                    # 只使用檔案名稱，不加入函式名稱
+                    safe_filename = f"{base_name}_report.json"
+                        
+                    original_output_file = original_output_dir / safe_filename
+                elif project_name and round_number == 0:
+                    # 原始狀態掃描：OriginalScanResult/Bandit/CWE-{cwe}/{project_name}/原始狀態/
+                    original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 使用目錄前綴和檔案名稱
+                    file_parts = file_path.parts
+                    if len(file_parts) >= 2:
+                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    else:
+                        base_name = file_path.name
+                    
+                    safe_filename = f"{base_name}_report.json"
+                    original_output_file = original_output_dir / safe_filename
+                else:
+                    # 無專案名稱的單檔掃描：OriginalScanResult/Bandit/single_file/CWE-{cwe}/
+                    original_output_dir = self.bandit_original_dir / "single_file" / f"CWE-{cwe}"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 只使用檔案名稱（不包含函式名稱）
+                    original_output_file = original_output_dir / f"{file_path.name}_report.json"
+                
+                bandit_cmd = ".venv/bin/bandit" if self._check_command(".venv/bin/bandit") else "bandit"
+                cmd = [bandit_cmd, str(file_path), "-t", tests, "-f", "json", "-o", str(original_output_file)]
+                
+                try:
+                    subprocess.run(cmd, capture_output=True, timeout=60)
+                    if original_output_file.exists():
+                        vulns = self._parse_bandit_results(original_output_file, cwe, function_name)
+                        all_vulns.extend(vulns)
+                        
+                        # 只有在保存結果時才記錄和備份
+                        if save_result:
+                            logger.debug(f"✅ 原始報告已保存: {original_output_file}")
+                            # 備份被掃描的檔案
+                            self._backup_scanned_file(file_path, original_output_dir, safe_filename)
+                except Exception as e:
+                    logger.error(f"Bandit 單檔掃描失敗: {e}")
+            
+            # Semgrep 掃描
+            if ScannerType.SEMGREP in self.available_scanners and cwe in self.SEMGREP_BY_CWE:
+                rule_patterns = self.SEMGREP_BY_CWE[cwe]
+                
+                # 將規則字符串分割成列表（支援逗號分隔的多個規則）
+                if isinstance(rule_patterns, str):
+                    rule_list = [r.strip() for r in rule_patterns.split(",")]
+                else:
+                    rule_list = rule_patterns
+                
+                # 當 save_result=False 時使用臨時目錄
+                if temp_dir:
+                    original_output_dir = temp_dir
+                    safe_filename = "semgrep_temp_report.json"
+                    original_output_file = temp_dir / safe_filename
+                # 決定 OriginalScanResult 的保存位置
+                elif bait_code_test_dir and bait_code_test_num is not None and project_name and round_number is not None and round_number > 0:
+                    # Bait Code Test 驗證掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/bait_code_test/{filename}/驗證N_report.json
+                    original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪" / "bait_code_test" / bait_code_test_dir
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    safe_filename = f"驗證{bait_code_test_num}_report.json"
+                    original_output_file = original_output_dir / safe_filename
+                elif project_name and round_number is not None and round_number > 0:
+                    # 輪次掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/第N輪/
+                    original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 使用目錄前綴和檔案名稱（不包含函式名稱）
+                    file_parts = file_path.parts
+                    if len(file_parts) >= 2:
+                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    else:
+                        base_name = file_path.name
+                    
+                    # 只使用檔案名稱，不加入函式名稱
+                    safe_filename = f"{base_name}_report.json"
+                        
+                    original_output_file = original_output_dir / safe_filename
+                elif project_name and round_number == 0:
+                    # 原始狀態掃描：OriginalScanResult/Semgrep/CWE-{cwe}/{project_name}/原始狀態/
+                    original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 使用目錄前綴和檔案名稱
+                    file_parts = file_path.parts
+                    if len(file_parts) >= 2:
+                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    else:
+                        base_name = file_path.name
+                    
+                    safe_filename = f"{base_name}_report.json"
+                    original_output_file = original_output_dir / safe_filename
+                else:
+                    # 無專案名稱的單檔掃描：OriginalScanResult/Semgrep/single_file/CWE-{cwe}/
+                    original_output_dir = self.semgrep_original_dir / "single_file" / f"CWE-{cwe}"
+                    original_output_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 只使用檔案名稱（不包含函式名稱）
+                    original_output_file = original_output_dir / f"{file_path.name}_report.json"
+                
+                # 構建 Semgrep 命令
+                semgrep_cmd = ".venv/bin/semgrep" if self._check_command(".venv/bin/semgrep") else "semgrep"
+                cmd = [semgrep_cmd, "scan"]
+                
+                # 添加規則
+                for rule in rule_list:
+                    if rule.startswith('p/') or rule.startswith('r/'):
+                        cmd.extend(["--config", rule])
+                    elif rule.endswith('.yaml') or rule.endswith('.yml') or ':' in rule:
+                        cmd.extend(["--config", rule])
+                    else:
+                        cmd.extend(["--config", f"r/{rule}"])
+                
+                cmd.extend([
+                    "--json",
+                    "--output", str(original_output_file),
+                    "--quiet",
+                    "--disable-version-check",
+                    "--metrics", "off",
+                    str(file_path)
+                ])
+                
+                try:
+                    result = subprocess.run(cmd, capture_output=True, timeout=60, text=True)
+                    
+                    if original_output_file.exists():
+                        vulns = self._parse_semgrep_results(original_output_file, cwe, file_path, function_name)
+                        all_vulns.extend(vulns)
+                        
+                        # 只有在保存結果時才記錄和備份
+                        if save_result:
+                            logger.debug(f"✅ Semgrep 原始報告已保存: {original_output_file}")
+                            # 備份被掃描的檔案
+                            self._backup_scanned_file(file_path, original_output_dir, safe_filename)
+                    else:
+                        # 掃描失敗：沒有產生輸出檔案
+                        logger.warning(f"Semgrep 掃描失敗，未產生輸出檔案 (return code: {result.returncode})")
+                        
+                        # 創建失敗記錄
+                        error_msg = result.stderr.strip() if result.stderr else "No output file generated"
+                        vuln = CWEVulnerability(
+                            cwe_id=cwe,
+                            file_path=str(file_path),
+                            line_start=0,
+                            line_end=0,
+                            function_name=function_name,
+                            scanner=ScannerType.SEMGREP,
+                            scan_status='failed',
+                            failure_reason=f"Semgrep failed to generate output (code {result.returncode}): {error_msg[:200]}",
+                            severity='',
+                            description=''
+                        )
+                        all_vulns.append(vuln)
+                        
+                except subprocess.TimeoutExpired:
+                    logger.error(f"Semgrep 單檔掃描超時: {file_path}")
+                    
+                    # 創建超時失敗記錄
                     vuln = CWEVulnerability(
                         cwe_id=cwe,
                         file_path=str(file_path),
@@ -1062,49 +1106,41 @@ class CWEDetector:
                         function_name=function_name,
                         scanner=ScannerType.SEMGREP,
                         scan_status='failed',
-                        failure_reason=f"Semgrep failed to generate output (code {result.returncode}): {error_msg[:200]}",
+                        failure_reason="Semgrep scan timeout (60 seconds)",
                         severity='',
                         description=''
                     )
                     all_vulns.append(vuln)
                     
-            except subprocess.TimeoutExpired:
-                logger.error(f"Semgrep 單檔掃描超時: {file_path}")
-                
-                # 創建超時失敗記錄
-                vuln = CWEVulnerability(
-                    cwe_id=cwe,
-                    file_path=str(file_path),
-                    line_start=0,
-                    line_end=0,
-                    function_name=function_name,
-                    scanner=ScannerType.SEMGREP,
-                    scan_status='failed',
-                    failure_reason="Semgrep scan timeout (60 seconds)",
-                    severity='',
-                    description=''
-                )
-                all_vulns.append(vuln)
-                
-            except Exception as e:
-                logger.error(f"Semgrep 單檔掃描失敗: {e}")
-                
-                # 創建失敗記錄
-                vuln = CWEVulnerability(
-                    cwe_id=cwe,
-                    file_path=str(file_path),
-                    line_start=0,
-                    line_end=0,
-                    function_name=function_name,
-                    scanner=ScannerType.SEMGREP,
-                    scan_status='failed',
-                    failure_reason=f"Semgrep scan exception: {str(e)}",
-                    severity='',
-                    description=''
-                )
-                all_vulns.append(vuln)
+                except Exception as e:
+                    logger.error(f"Semgrep 單檔掃描失敗: {e}")
+                    
+                    # 創建失敗記錄
+                    vuln = CWEVulnerability(
+                        cwe_id=cwe,
+                        file_path=str(file_path),
+                        line_start=0,
+                        line_end=0,
+                        function_name=function_name,
+                        scanner=ScannerType.SEMGREP,
+                        scan_status='failed',
+                        failure_reason=f"Semgrep scan exception: {str(e)}",
+                        severity='',
+                        description=''
+                    )
+                    all_vulns.append(vuln)
         
-        logger.info(f"單檔掃描完成，發現 {len(all_vulns)} 個漏洞")
+        finally:
+            # 清理臨時目錄
+            if temp_dir and temp_dir.exists():
+                import shutil
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass  # 忽略清理錯誤
+        
+        if save_result:
+            logger.info(f"單檔掃描完成，發現 {len(all_vulns)} 個漏洞")
         return all_vulns
     
     # NOTE: 此方法目前未使用，保留以備將來需要

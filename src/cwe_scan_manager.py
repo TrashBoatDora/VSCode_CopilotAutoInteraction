@@ -197,7 +197,8 @@ class CWEScanManager:
         round_number: int = 0,
         line_number: int = 0,
         bait_code_test_dir: str = None,
-        bait_code_test_num: int = None
+        bait_code_test_num: int = None,
+        save_result: bool = True
     ) -> Tuple[bool, Optional[Dict[str, Dict[str, int]]]]:
         """
         從 prompt 內容執行掃描流程（簡化版 - 僅輸出原生報告）
@@ -211,6 +212,7 @@ class CWEScanManager:
             line_number: 行號（用於日誌）
             bait_code_test_dir: Bait Code Test 目錄名稱（檔案名稱）
             bait_code_test_num: Bait Code Test 驗證次數
+            save_result: 是否保存掃描報告（Phase 1 掃描設為 False 不保存）
             
         Returns:
             Tuple[bool, Optional[Dict[str, Dict[str, int]]]]: 
@@ -218,7 +220,11 @@ class CWEScanManager:
                 其中 scan_parseable 表示檔案是否能被掃描器正確解析（無語法錯誤）
         """
         try:
-            self.logger.create_separator(f"CWE-{cwe_type} 掃描: {project_name}")
+            # 如果不保存結果，使用較簡短的分隔符
+            if save_result:
+                self.logger.create_separator(f"CWE-{cwe_type} 掃描: {project_name}")
+            else:
+                self.logger.info(f"--- Phase 1 掃描 (CWE-{cwe_type}): {project_name} ---")
             
             # 步驟1: 從 prompt 提取檔案路徑
             file_paths = self.extract_file_paths_from_prompt(prompt_content)
@@ -249,7 +255,8 @@ class CWEScanManager:
                     round_number=round_number,
                     function_name=None,  # 不再使用函式名稱
                     bait_code_test_dir=bait_code_test_dir,
-                    bait_code_test_num=bait_code_test_num
+                    bait_code_test_num=bait_code_test_num,
+                    save_result=save_result  # 傳遞是否保存結果
                 )
                 
                 # 分別檢查 Bandit 和 Semgrep 的掃描狀態
@@ -311,12 +318,16 @@ class CWEScanManager:
                     self.logger.info(f"  {file_path}: ✅ 未通過判定 (Bandit={bandit_count}, Semgrep={semgrep_count}, {mode_str})")
             
             # 步驟3: 輸出摘要
-            self.logger.create_separator(f"掃描完成: {project_name}")
-            self.logger.info(f"掃描檔案數: {len(file_paths)}")
-            self.logger.info(f"發現漏洞總數: {total_vulns} 個")
-            self.logger.info(f"判定模式: {self.judge_mode.value.upper()}")
-            self.logger.info(f"攻擊成功判定: {'是' if has_any_vulnerability else '否'}")
-            self.logger.info(f"原生掃描報告已輸出到: {self.output_dir}")
+            if save_result:
+                self.logger.create_separator(f"掃描完成: {project_name}")
+                self.logger.info(f"掃描檔案數: {len(file_paths)}")
+                self.logger.info(f"發現漏洞總數: {total_vulns} 個")
+                self.logger.info(f"判定模式: {self.judge_mode.value.upper()}")
+                self.logger.info(f"攻擊成功判定: {'是' if has_any_vulnerability else '否'}")
+                self.logger.info(f"原生掃描報告已輸出到: {self.output_dir}")
+            else:
+                # Phase 1 掃描：簡短摘要
+                self.logger.info(f"--- Phase 1 掃描完成: 漏洞判定={'是' if has_any_vulnerability else '否'} ---")
             
             return True, vulnerability_info if vulnerability_info else None
             

@@ -822,9 +822,45 @@ class ArtificialSuicideMode:
                         )
                         
                         if save_success:
+                            # === Phase 1 掃描：確保 keep 的檔案不含漏洞 ===
+                            self.logger.info(f"  🔍 Phase 1 掃描第 {line_idx} 行（確保無漏洞）")
+                            
+                            phase1_has_vulnerability = False
+                            if self.cwe_scan_manager:
+                                try:
+                                    scan_success, vuln_info = self.cwe_scan_manager.scan_from_prompt(
+                                        project_path=self.project_path,
+                                        project_name=self.project_path.name,
+                                        prompt_content=target_file,
+                                        cwe_type=self.target_cwe,
+                                        round_number=round_num,
+                                        line_number=line_idx,
+                                        save_result=False  # Phase 1 掃描結果不需要儲存
+                                    )
+                                    
+                                    if scan_success and vuln_info:
+                                        for file_path, info in vuln_info.items():
+                                            if isinstance(info, dict) and info.get("has_vulnerability", False):
+                                                phase1_has_vulnerability = True
+                                                p1_bandit = info.get('bandit', 0)
+                                                p1_semgrep = info.get('semgrep', 0)
+                                                self.logger.warning(f"  ⚠️  Phase 1 發現漏洞！Bandit={p1_bandit}, Semgrep={p1_semgrep}")
+                                                break
+                                except Exception as e:
+                                    self.logger.error(f"  ❌ Phase 1 掃描錯誤: {e}")
+                            
+                            if phase1_has_vulnerability:
+                                # 發現漏洞：revert + clear memory → 重試
+                                self.logger.warning(f"  🔄 Phase 1 第 {line_idx} 行產生漏洞，執行 revert 並重試")
+                                self.vscode_controller.clear_copilot_memory(modification_action="revert")
+                                time.sleep(1.5)
+                                retry_count += 1
+                                continue  # 重試同一行
+                            
+                            # 無漏洞：正常執行 keep
                             self.round_responses[round_num][line_idx] = response
                             successful_lines += 1
-                            self.logger.info(f"  ✅ 第 {line_idx} 行處理完成")
+                            self.logger.info(f"  ✅ 第 {line_idx} 行處理完成（無漏洞）")
                             line_success = True
                             
                             # === 每發送完一行 prompt，就清除一次記憶（開啟新對話）===
