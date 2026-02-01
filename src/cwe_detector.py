@@ -837,17 +837,19 @@ class CWEDetector:
         function_name: Optional[str] = None,
         bait_code_test_dir: Optional[str] = None,
         bait_code_test_num: Optional[int] = None,
-        save_result: bool = True
+        save_result: bool = True,
+        relative_file_path: Optional[str] = None
     ) -> List[CWEVulnerability]:
         """
         掃描單一檔案
         
         Args:
-            file_path: 檔案路徑
+            file_path: 檔案路徑（絕對路徑）
             cwe: CWE ID
             project_name: 專案名稱（用於 OriginalScanResult 目錄結構）
             round_number: 輪數（用於 OriginalScanResult 目錄結構）
             function_name: 函式名稱（用於檔案命名以避免衝突）
+            relative_file_path: 相對於專案的檔案路徑（用於命名，避免路徑衝突）
             bait_code_test_dir: Bait Code Test 目錄名稱（檔案名稱）
             bait_code_test_num: Bait Code Test 驗證次數
             save_result: 是否保存掃描報告（Phase 1 掃描設為 False）
@@ -929,12 +931,16 @@ class CWEDetector:
                     original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                     original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 使用目錄前綴和檔案名稱（不包含函式名稱）
-                    file_parts = file_path.parts
-                    if len(file_parts) >= 2:
-                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    # 使用相對路徑命名（如果提供），避免路徑衝突
+                    if relative_file_path:
+                        base_name = relative_file_path.replace('/', '__').replace('\\', '__')
                     else:
-                        base_name = file_path.name
+                        # 向後兼容：使用最後兩層目錄
+                        file_parts = file_path.parts
+                        if len(file_parts) >= 2:
+                            base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                        else:
+                            base_name = file_path.name
                     
                     # 只使用檔案名稱，不加入函式名稱
                     safe_filename = f"{base_name}_report.json"
@@ -945,12 +951,16 @@ class CWEDetector:
                     original_output_dir = self.bandit_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
                     original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 使用目錄前綴和檔案名稱
-                    file_parts = file_path.parts
-                    if len(file_parts) >= 2:
-                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    # 使用相對路徑命名（如果提供），避免路徑衝突
+                    if relative_file_path:
+                        base_name = relative_file_path.replace('/', '__').replace('\\', '__')
                     else:
-                        base_name = file_path.name
+                        # 向後兼容：使用最後兩層目錄
+                        file_parts = file_path.parts
+                        if len(file_parts) >= 2:
+                            base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                        else:
+                            base_name = file_path.name
                     
                     safe_filename = f"{base_name}_report.json"
                     original_output_file = original_output_dir / safe_filename
@@ -1007,12 +1017,16 @@ class CWEDetector:
                     original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / f"第{round_number}輪"
                     original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 使用目錄前綴和檔案名稱（不包含函式名稱）
-                    file_parts = file_path.parts
-                    if len(file_parts) >= 2:
-                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    # 使用相對路徑命名（如果提供），避免路徑衝突
+                    if relative_file_path:
+                        base_name = relative_file_path.replace('/', '__').replace('\\', '__')
                     else:
-                        base_name = file_path.name
+                        # 向後兼容：使用最後兩層目錄
+                        file_parts = file_path.parts
+                        if len(file_parts) >= 2:
+                            base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                        else:
+                            base_name = file_path.name
                     
                     # 只使用檔案名稱，不加入函式名稱
                     safe_filename = f"{base_name}_report.json"
@@ -1023,12 +1037,16 @@ class CWEDetector:
                     original_output_dir = self.semgrep_original_dir / f"CWE-{cwe}" / project_name / "原始狀態"
                     original_output_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 使用目錄前綴和檔案名稱
-                    file_parts = file_path.parts
-                    if len(file_parts) >= 2:
-                        base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                    # 使用相對路徑命名（如果提供），避免路徑衝突
+                    if relative_file_path:
+                        base_name = relative_file_path.replace('/', '__').replace('\\', '__')
                     else:
-                        base_name = file_path.name
+                        # 向後兼容：使用最後兩層目錄
+                        file_parts = file_path.parts
+                        if len(file_parts) >= 2:
+                            base_name = f"{file_parts[-2]}__{file_parts[-1]}"
+                        else:
+                            base_name = file_path.name
                     
                     safe_filename = f"{base_name}_report.json"
                     original_output_file = original_output_dir / safe_filename

@@ -256,7 +256,8 @@ class CWEScanManager:
                     function_name=None,  # 不再使用函式名稱
                     bait_code_test_dir=bait_code_test_dir,
                     bait_code_test_num=bait_code_test_num,
-                    save_result=save_result  # 傳遞是否保存結果
+                    save_result=save_result,  # 傳遞是否保存結果
+                    relative_file_path=file_path  # 傳入相對路徑避免命名衝突
                 )
                 
                 # 分別檢查 Bandit 和 Semgrep 的掃描狀態
@@ -384,7 +385,8 @@ class CWEScanManager:
                     cwe_type,
                     project_name=project_name,
                     round_number=0,  # 0 表示原始狀態
-                    function_name=None  # 不再使用函式名稱
+                    function_name=None,  # 不再使用函式名稱
+                    relative_file_path=file_path  # 傳入相對路徑避免命名衝突
                 )
                 
                 # 分別統計 Bandit 和 Semgrep 的漏洞
