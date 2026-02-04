@@ -333,14 +333,14 @@ class ProjectManager:
             has_files = 0
             
             if project_result_dir.exists():
-                # 檢查直接在目錄下的檔案
-                direct_files = list(project_result_dir.glob("*_第*輪.md")) + list(project_result_dir.glob("*_第*輪_第*行.md"))
-                # 檢查子目錄（第1輪/、第2輪/ 等）內的檔案
-                subdir_files = list(project_result_dir.glob("第*輪/*_第*行.md"))
                 # 遞迴檢查所有 .md 檔案
                 all_md_files = list(project_result_dir.rglob("*.md"))
+                # 檢查是否有符合命名規則的結果檔案（支援任意深度目錄結構）
+                # 格式: *_第*行.md 或 *_第*輪.md 或 *_第*輪_第*行.md
+                result_files = list(project_result_dir.rglob("*_第*行.md")) + \
+                               list(project_result_dir.rglob("*_第*輪.md"))
                 
-                has_success_file = len(direct_files) > 0 or len(subdir_files) > 0
+                has_success_file = len(result_files) > 0
                 has_files = len(all_md_files)
             
             self.logger.info(f"結果檔案驗證 - 目錄存在: {project_result_dir.exists()}, "
